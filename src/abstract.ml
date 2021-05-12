@@ -40,6 +40,7 @@ module Make (A : sig
     !ans
 end
 
+(*
 let vars = ["x"; "y"; "xp"; "yp"];;
 
 module A = Affine.Make(struct let vars = vars end)
@@ -77,3 +78,4 @@ let res = ARA.alpha_from_below ~context:(Some ctx) psi;;
 
 print_endline (A.to_string res)
 
+*)

@@ -1,4 +1,13 @@
-module Make (A: sig val vars : string list end) = struct
+module type Domain = sig
+  type t
+  val bot : t
+  val sing : Z3.context -> Z3.Model.model -> t
+  val join : t -> t -> t
+  val gamma_hat : Z3.context -> t -> Z3.Expr.expr
+  val to_string : t -> string
+end
+
+module Make (A: sig val vars : string list end) : Domain = struct
 
   let add = Mpqf.add 
   let mul = Mpqf.mul
