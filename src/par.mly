@@ -27,7 +27,7 @@
         %token <int> INT
         %token <string> IDENT
         %token PLUS MINUS TIMES ASSIGN
-        %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT
+        %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT ASSERTION ASSUME
         %token LE LESS GREATER GE EQUAL
         %token LPAREN RPAREN SC
         %token EOF
@@ -35,10 +35,22 @@
         %left TIMES AND         /* medium precedence */
         %nonassoc UMINUS UNOT   /* highest precedence */
         %start main             /* the entry point */
-        %type <(PathExp.statement PathExp.pathexp) * string list> main
+        %type <(PathExp.statement PathExp.pathexp * PathExp.boolexp option) * string list> main
         %%
         main:
-            statement EOF                { ($1, to_list !vars) }
+            program EOF                 { $1, to_list !vars }
+        ;
+        program:
+            assume statement            { PathExp.Mul($1, $2), None }
+          | statement                   { $1, None }
+          | statement assertion         { $1, Some $2 }
+          | assume statement assertion     { PathExp.Mul($1, $2), Some $3 }
+        ;
+        assume:
+            ASSUME LPAREN boolexp RPAREN    { PathExp.Letter(PathExp.Cond($3)) }
+        ;
+        assertion:
+            ASSERTION LPAREN boolexp RPAREN    { $3 }
         ;
         statement:
             statement loop statement        { PathExp.Mul($1, PathExp.Mul($2, $3)) }

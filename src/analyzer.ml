@@ -7,7 +7,9 @@ module Make (D : sig type t
                  val star : t -> t
                  val interp : PathExp.statement -> t 
                  val to_string : t -> string 
-                 val set_vars : string list -> unit end) : (sig val analyze : in_channel -> unit end) = struct
+                 val set_vars : string list -> unit 
+                 val check_assert : t -> PathExp.boolexp -> bool
+                end) : (sig val analyze : in_channel -> unit end) = struct
   
   let rec eval p = (*Could be memoized*)
     match p with
@@ -19,10 +21,17 @@ module Make (D : sig type t
     | PathExp.Star a -> D.star (eval a)
 
   let analyze file = 
-    let (pathexp, vars) = Par.main Lex.token (Lexing.from_channel file) in
+    let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel file) in
     D.set_vars vars;
-    let result = eval pathexp in
-    print_endline (D.to_string result)
+    let summary = eval body in
+    print_endline (D.to_string summary);
+    match assertion with
+    | None -> ()
+    | Some a -> 
+      if D.check_assert summary a then
+        print_endline("PASSED")
+      else
+        print_endline("FAILED")
 
 end
 

@@ -106,4 +106,21 @@ module Make() = struct
     let guard_str = Z3.Expr.to_string (Z3.Expr.simplify tr.guard None) in
     transform_str ^ "\nwhen " ^ guard_str
 
+  let check_assert summary asser = 
+    let assertion = interp_c asser in
+    let transform = summary.transform in
+    let guard = summary.guard in
+    let subst = 
+      let sub_pairs = ref [] in
+      ST.iter (fun v term -> sub_pairs := (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table), term) :: !sub_pairs) transform;
+      List.split !sub_pairs
+    in
+    let sub_assert = Z3.Expr.substitute assertion (fst subst) (snd subst) in
+    let final_check = Z3.Boolean.mk_and ctx [guard; Z3.Boolean.mk_not ctx sub_assert] in
+    let solver = Z3.Solver.mk_simple_solver ctx in
+    Z3.Solver.add solver [final_check];
+    match (Z3.Solver.check solver []) with
+    | Z3.Solver.UNSATISFIABLE -> true
+    | _ -> false
+
 end

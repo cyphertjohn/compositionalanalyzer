@@ -11,7 +11,9 @@
                         "while", WHILE;
                         "done", DONE;
                         "true", TRUE;
-                        "false", FALSE
+                        "false", FALSE;
+                        "assume", ASSUME;
+                        "assert", ASSERTION
                         ]
 }
 rule token = parse
