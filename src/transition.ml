@@ -6,10 +6,16 @@ module Make() = struct
   module ST = Map.Make(struct type t = string let compare = compare end)
 
   let sym_table = ref ST.empty
+  let psym_table = ref ST.empty
+
+  let vars = ref []
 
   let set_vars variables =
+    vars := variables;
     List.iter (fun v -> let vsym = Z3.Symbol.mk_string ctx v in
-                        sym_table := ST.add v vsym !sym_table) variables
+                        sym_table := ST.add v vsym !sym_table;
+                        let vpsym = Z3.Symbol.mk_string ctx (v^"'") in
+                        psym_table := ST.add v vpsym !psym_table) variables
 
   (*let curr = ref 10
 
@@ -97,15 +103,6 @@ module Make() = struct
       let transform = ST.empty in
       {guard; transform}
 
-  let to_string tr = 
-    let transform = tr.transform in
-    let transform_list = ref [] in
-    ST.iter (fun v term -> 
-      transform_list := (v ^ "' := " ^ (Z3.Expr.to_string (Z3.Expr.simplify term None)))::!transform_list) transform;
-    let transform_str = String.concat "\n" !transform_list in
-    let guard_str = Z3.Expr.to_string (Z3.Expr.simplify tr.guard None) in
-    transform_str ^ "\nwhen " ^ guard_str
-
   let check_assert summary asser = 
     let assertion = interp_c asser in
     let transform = summary.transform in
@@ -122,5 +119,30 @@ module Make() = struct
     match (Z3.Solver.check solver []) with
     | Z3.Solver.UNSATISFIABLE -> true
     | _ -> false
+
+  let to_formula tr =
+    let transform = tr.transform in
+    let guard = tr.guard in
+    let transforms = List.map
+      (fun v -> 
+        let vp = Z3.Arithmetic.Integer.mk_const ctx (ST.find v !psym_table) in
+        try 
+          let term = ST.find v transform in
+          Z3.Boolean.mk_eq ctx vp term
+        with Not_found -> 
+          Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table))
+        ) !vars in
+    (Z3.Boolean.mk_and ctx (guard :: transforms), ctx)
+
+  let to_string tr = 
+    let transform = tr.transform in
+    let transform_list = ref [] in
+    ST.iter (fun v term -> 
+      transform_list := (v ^ "' := " ^ (Z3.Expr.to_string (Z3.Expr.simplify term None)))::!transform_list) transform;
+    let transform_str = String.concat "\n" !transform_list in
+    let guard_str = Z3.Expr.to_string (Z3.Expr.simplify tr.guard None) in
+    transform_str ^ "\nwhen " ^ guard_str
+    (*let (form, _) = to_formula tr in
+    Z3.Expr.to_string (Z3.Expr.simplify form None)*)
 
 end

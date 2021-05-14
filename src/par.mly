@@ -27,7 +27,7 @@
         %token <int> INT
         %token <string> IDENT
         %token PLUS MINUS TIMES ASSIGN
-        %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT ASSERTION ASSUME
+        %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT ASSERTION ASSUME NONDET
         %token LE LESS GREATER GE EQUAL
         %token LPAREN RPAREN SC
         %token EOF
@@ -56,6 +56,7 @@
             statement loop statement        { PathExp.Mul($1, PathExp.Mul($2, $3)) }
           | statement loop                  { PathExp.Mul($1, $2) }
           | loop statement                  { PathExp.Mul($1, $2) }
+          | loop                            { $1 }
           | statement branch statement      { PathExp.Mul($1, PathExp.Mul($2, $3)) }
           | statement branch                { PathExp.Mul($1, $2) }
           | branch statement                { PathExp.Mul($1, $2) }
@@ -65,10 +66,13 @@
         ;
         loop:
             WHILE LPAREN boolexp RPAREN DO statement DONE   { PathExp.Mul(PathExp.Star(PathExp.Mul(PathExp.Letter(PathExp.Cond($3)), $6)), PathExp.Letter(PathExp.Cond(PathExp.Not($3)))) }
+          | WHILE LPAREN NONDET RPAREN DO statement DONE   { PathExp.Star($6) }
         ;
         branch:
             IF LPAREN boolexp RPAREN THEN statement ENDIF                 { PathExp.Plus(PathExp.Mul(PathExp.Letter(PathExp.Cond($3)), $6), PathExp.Letter(PathExp.Cond(PathExp.Not($3)))) }
           | IF LPAREN boolexp RPAREN THEN statement ELSE statement ENDIF  { PathExp.Plus(PathExp.Mul(PathExp.Letter(PathExp.Cond($3)), $6), PathExp.Mul(PathExp.Letter(PathExp.Cond(PathExp.Not($3))), $8)) }
+          | IF LPAREN NONDET RPAREN THEN statement ENDIF                 { PathExp.Plus($6, PathExp.One) }
+          | IF LPAREN NONDET RPAREN THEN statement ELSE statement ENDIF  { PathExp.Plus($6, $8) }
         ;
         linassign:
             IDENT ASSIGN linexp             { (add_var $1); PathExp.Letter(PathExp.Assign($1, add_Add $3)) }

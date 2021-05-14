@@ -20,12 +20,7 @@ module Make (A : sig
     | Some model -> model
     | None -> failwith "No model or unchecked solver"
 
-  let alpha_from_below ?context:(context = None) psi = 
-    let ctx = 
-      match context with
-      | None -> Z3.mk_context []
-      | Some x -> x
-    in
+  let alpha_from_below ?context:(ctx = Z3.mk_context []) psi = 
     let solver = Z3.Solver.mk_simple_solver ctx in
     let ans = ref bot in
     Z3.Solver.add solver [psi];
@@ -33,8 +28,6 @@ module Make (A : sig
       let model = get_model solver in
       let singlet = sing ctx model in
       ans := join !ans singlet;
-      print_endline "Curr ans:";
-      print_endline (A.to_string !ans);
       Z3.Solver.add solver [Z3.Boolean.mk_not ctx (gamma_hat ctx !ans)]
     done;
     !ans
