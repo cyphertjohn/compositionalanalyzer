@@ -13,3 +13,4 @@ Then the ocaml packages can be installed with
 ```
 opam install ocamlbuild mlgmpidl z3
 ```
+Installing z3 may take a while.
