@@ -3,7 +3,7 @@
 ## Dependencies
 The analyzer is written in ocaml and requires ocamlbuild, Z3, and an ocaml interface to the GNU MultiPrecision library (gmp). These packages can be installed with opam. To install opam and gmp run:
 ```
-sudo apt-get install opam libgmp-dev
+sudo apt-get install opam libgmp-dev libmpfr-dev
 ```
 Then if opam hasn't been initialized run:
 ```
