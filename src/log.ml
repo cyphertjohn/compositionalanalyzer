@@ -65,3 +65,5 @@ let log_time_cum label f arg =
     else Printf.ifprintf !chan "%s: %f s\n" label tim
   in
   res
+
+let close () = close_out !chan

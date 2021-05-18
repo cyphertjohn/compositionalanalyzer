@@ -2,3 +2,5 @@ _build/
 .vscode/
 *.top
 *.native
+analyzer.docdir
+analyzer.docdir/

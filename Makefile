@@ -5,8 +5,8 @@ OCB_FLAGS = -use-ocamlfind -tag 'thread' -tag 'cclib(-lstdc++)' -package 'z3' -p
 native:
 	$(OCB) $(OCB_FLAGS) analyzer.native
 
-top:
-	$(OCB) $(OCB_FLAGS) analyzer.top
+doc:
+	$(OCB) $(OCB_FLAGS) analyzer.docdir/index.html
 
 clean:
 	$(OCB) -clean

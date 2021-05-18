@@ -67,7 +67,7 @@ let analyze_file in_file_name =
   let (summary_form, ctx) = CRA.to_formula summary in
   Logger.log_line (Z3.Expr.to_string summary_form);
   close_in ic;
-  if (!log_out_file) then close_out !Logger.chan
+  if (!log_out_file) then Logger.close ()
   else ()
 
 
