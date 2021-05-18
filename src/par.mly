@@ -61,7 +61,7 @@
           | statement branch                { PathExp.Mul($1, $2) }
           | branch statement                { PathExp.Mul($1, $2) }
           | branch                          { $1 }
-          | statement SC statement          { PathExp.Mul($1, $3) }
+          | statement statement          { PathExp.Mul($1, $2) }
           | linassign                       { $1 }
         ;
         loop:
@@ -75,7 +75,7 @@
           | IF LPAREN NONDET RPAREN THEN statement ELSE statement ENDIF  { PathExp.Plus($6, $8) }
         ;
         linassign:
-            IDENT ASSIGN linexp             { (add_var $1); PathExp.Letter(PathExp.Assign($1, add_Add $3)) }
+            IDENT ASSIGN linexp SC           { (add_var $1); PathExp.Letter(PathExp.Assign($1, add_Add $3)) }
         ;
         linexp:
             linterm PLUS linexp              { $1 :: $3 }

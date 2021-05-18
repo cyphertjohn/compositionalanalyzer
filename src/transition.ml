@@ -7,6 +7,7 @@ module Make() = struct
 
   let sym_table = ref ST.empty
   let psym_table = ref ST.empty
+  let non_prog_vars = ref []
 
   let vars = ref []
 
@@ -17,12 +18,25 @@ module Make() = struct
                         let vpsym = Z3.Symbol.mk_string ctx (v^"'") in
                         psym_table := ST.add v vpsym !psym_table) variables
 
-  (*let curr = ref 10
+  let curr = ref 10
 
-  let mk_fresh_sym () = 
-    let fresh = Z3.Symbol.mk_int ctx !curr in
+  let mk_phi v = 
+    let fresh = Z3.Symbol.mk_string ctx ("phi_" ^ v ^ (string_of_int !curr)) in
     curr := !curr + 1;
-    fresh*)
+    non_prog_vars := fresh :: !non_prog_vars;
+    fresh
+
+  let make_havoc () =
+    let sym = Z3.Symbol.mk_string ctx ("havoc_" ^ (string_of_int !curr)) in
+    curr := !curr + 1;
+    non_prog_vars := sym :: !non_prog_vars;
+    Z3.Arithmetic.Integer.mk_const ctx sym
+  
+  let make_fresh v = 
+    let sym = Z3.Symbol.mk_string ctx (v ^"!" ^ (string_of_int !curr)) in
+    curr := !curr + 1;
+    non_prog_vars := sym :: !non_prog_vars;
+    Z3.Arithmetic.Integer.mk_const ctx sym
 
   type t = { transform : Z3.Expr.expr ST.t;
              guard : Z3.Expr.expr }
@@ -38,7 +52,8 @@ module Make() = struct
         match x, y with
         | Some s, Some t when Z3.Expr.equal s t -> Some s
         | _, _ ->
-          let phi = Z3.Arithmetic.Integer.mk_const_s ctx ("phi_" ^ v) in
+          let phi_s = mk_phi v in
+          let phi = Z3.Arithmetic.Integer.mk_const ctx phi_s in
           let left_term = 
             match x with 
             | Some s -> s
@@ -120,6 +135,12 @@ module Make() = struct
     | Z3.Solver.UNSATISFIABLE -> true
     | _ -> false
 
+  let project_vars form var_symbols = 
+    let bound_vars = List.mapi (fun i _ -> Z3.Quantifier.mk_bound ctx i (Z3.Arithmetic.Integer.mk_sort ctx)) var_symbols in
+    let subst_form = Z3.Expr.substitute form (List.map (Z3.Arithmetic.Integer.mk_const ctx) var_symbols) bound_vars in
+    let quant = Z3.Quantifier.mk_exists ctx (List.map (fun _ -> Z3.Arithmetic.Integer.mk_sort ctx) bound_vars) var_symbols subst_form None [] [] None None in
+    Z3.Expr.simplify (Z3.Quantifier.expr_of_quantifier quant) None
+
   let to_formula tr =
     let transform = tr.transform in
     let guard = tr.guard in
@@ -132,7 +153,7 @@ module Make() = struct
         with Not_found -> 
           Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table))
         ) !vars in
-    (Z3.Boolean.mk_and ctx (guard :: transforms), ctx)
+    (project_vars (Z3.Boolean.mk_and ctx (guard :: transforms)) !non_prog_vars, ctx)
 
   let to_string tr = 
     let transform = tr.transform in

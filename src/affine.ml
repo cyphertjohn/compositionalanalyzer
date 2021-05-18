@@ -27,9 +27,9 @@ module Make () = struct
   let cmp = Mpqf.cmp
   let get_den = Mpqf.get_den
 
-  let vars = ref []
+  (*let vars = ref []
 
-  let set_vars variables = vars := variables
+  let set_vars variables = vars := variables *)
 
   let make_iden ?neg:(negate = false) n = 
     let res = Array.make n 0 in
@@ -120,18 +120,47 @@ module Make () = struct
     done;
     (a, t, p)
   
+  module S = Map.Make(struct type t = Z3.Symbol.symbol let compare x y = compare (Z3.Symbol.to_string x) (Z3.Symbol.to_string y) end)
+
   type t = 
     | Bot
     | Top
-    | I of Mpqf.t array array * Mpqf.t array
+    | I of Mpqf.t S.t array * Mpqf.t array * Z3.Symbol.symbol list
+
+  let to_matrix coef_map vars = 
+    let n = List.length vars in
+    let build_row row_map = 
+      let row = Array.make n (from_string "0") in
+      List.iteri 
+        (fun i var -> 
+          try 
+            row.(i) <- S.find var row_map
+          with Not_found ->
+            ()
+        ) vars;
+      row
+    in
+    Array.map build_row coef_map
+
+  let to_map matrix vars =
+    let var_pos = List.mapi (fun i v -> (i, v)) vars in
+    let build_row row = 
+      let folder acc (i, v) =
+        S.add v row.(i) acc
+      in
+      List.fold_left folder S.empty var_pos
+    in
+    Array.map build_row matrix
+
 
   let to_string d =
     match d with
     | Bot -> "Bot"
     | Top -> "Top"
-    | I (a, b) -> 
+    | I (map, b, vars) -> 
+      let a = to_matrix map vars in
       let row i = 
-        String.concat "+" (List.map2 (fun var x -> (to_string_c x) ^ var) !vars (Array.to_list a.(i))) ^ " == " ^ (to_string_c b.(i))
+        String.concat "+" (List.map2 (fun var x -> (to_string_c x) ^ (Z3.Symbol.get_string var)) vars (Array.to_list a.(i))) ^ " == " ^ (to_string_c b.(i))
       in
       String.concat "\n" (Array.to_list (Array.mapi (fun r _ -> row r) a))
 
@@ -153,6 +182,41 @@ module Make () = struct
     let mw = get_mat_widths m in
     print_endline (String.concat "\n" (Array.to_list (Array.mapi (fun i _ -> mat_row_to_string m.(i) mw) m)))
     
+  let merge_vars vl1 vl2 =
+    let (sortvl1, sortvl2) = (List.sort compare vl1, List.sort compare vl2) in
+    let rec aux l1 l2 acc =
+      match (l1, l2) with
+      | ([], _) -> l2 @ acc
+      | (_, []) -> l1 @ acc
+      | (x :: xs, y :: ys) -> 
+        if compare x y = 0 then aux xs ys (x :: acc)
+        else if compare x y < 0 then aux xs l2 (x :: acc)
+        else aux l1 ys (y :: acc)
+      in
+    aux sortvl1 sortvl2 []
+
+  let project el vars_to_keep = 
+    match el with
+    | Top -> Top
+    | Bot -> Bot
+    | I (m, b, vars) ->
+      let (_, vars_to_remove) = List.partition (fun v -> List.mem v vars_to_keep) vars in
+      let a = to_matrix m (vars_to_remove @ vars_to_keep) in
+      let a_neg_b = Array.mapi (fun i arow -> Array.append arow (Array.make 1 (neg b.(i)))) a in
+      let (r, _, _) = rref a_neg_b in
+      let keep_row row = 
+        let leading_zeros = Array.for_all is_zero (Array.sub row 0 (List.length vars_to_remove)) in
+        if leading_zeros then
+          not (Array.for_all is_zero row)
+        else
+          leading_zeros
+      in
+      let proj_rows = List.map (fun row -> Array.sub row (List.length vars_to_remove) ((List.length vars_to_keep) + 1)) (List.filter keep_row (Array.to_list r)) in
+      let proj_rows = List.map normalize proj_rows in
+      let (new_a, new_b) = List.split (List.map (fun row -> (Array.sub row 0 (List.length vars_to_keep), neg row.(List.length vars_to_keep))) proj_rows) in
+      I (to_map (Array.of_list new_a) vars_to_keep, Array.of_list new_b, vars_to_keep)
+
+  
   let bot = Bot
 
   let join x y = 
@@ -161,26 +225,29 @@ module Make () = struct
     | (_, Top) -> Top
     | (Bot, _) -> y
     | (_, Bot) -> x
-    | (I (a1, b1), I (a2, b2)) -> 
-      let first_row_block = Array.make_matrix 1 (3 + 3*(List.length !vars)) (from_string "0") in
+    | (I (m1, b1, vars1), I (m2, b2, vars2)) -> 
+      let vars = merge_vars vars1 vars2 in
+      let a1 = to_matrix m1 vars in
+      let a2 = to_matrix m2 vars in
+      let first_row_block = Array.make_matrix 1 (3 + 3*(List.length vars)) (from_string "0") in
       first_row_block.(0).(0) <- from_string "1";
       first_row_block.(0).(1) <- from_string "1";
       first_row_block.(0).((Array.length first_row_block.(0)) - 1) <- from_string "-1";
       let construct_a1_block i _ = 
         let bblock = Array.make (2) (from_string "0") in
         bblock.(0) <- neg b1.(i);
-        let zeros = Array.make (1 + 2*(List.length !vars)) (from_string "0") in
+        let zeros = Array.make (1 + 2*(List.length vars)) (from_string "0") in
         Array.append bblock (Array.append a1.(i) zeros)
       in
       let construct_a2_block i _ = 
         let bblock = Array.make 2 (from_string "0") in
         bblock.(1) <- neg b2.(i);
-        let zeros1 = Array.make (List.length !vars) (from_string "0") in
-        let zeros2 = Array.make (1+(List.length !vars)) (from_string "0") in
+        let zeros1 = Array.make (List.length vars) (from_string "0") in
+        let zeros2 = Array.make (1+(List.length vars)) (from_string "0") in
         Array.append bblock (Array.append zeros1 (Array.append a2.(i) zeros2))
       in
-      let neg_iden = make_iden ~neg:(true) (List.length !vars) in
-      let iden = make_iden (List.length !vars) in
+      let neg_iden = make_iden ~neg:(true) (List.length vars) in
+      let iden = make_iden (List.length vars) in
       let construct_iden_block i _ =
         let bblock = Array.make 2 (from_string "0") in
         let zero = Array.make 1 (from_string "0") in
@@ -192,46 +259,46 @@ module Make () = struct
       let cons_matrix = Array.append first_row_block (Array.append a1_block (Array.append a2_block iden_block)) in
       let (r, _, _) = rref cons_matrix in
       let keep_row row = 
-        let leading_zeros = Array.for_all is_zero (Array.sub row 0 (2 + 2*(List.length !vars))) in
+        let leading_zeros = Array.for_all is_zero (Array.sub row 0 (2 + 2*(List.length vars))) in
         if leading_zeros then
           not (Array.for_all is_zero row)
         else
           leading_zeros
       in
-      let new_const = List.map (fun row -> Array.sub row (2+2*(List.length !vars)) ((List.length !vars) + 1)) (List.filter keep_row (Array.to_list r)) in
+      let new_const = List.map (fun row -> Array.sub row (2+2*(List.length vars)) ((List.length vars) + 1)) (List.filter keep_row (Array.to_list r)) in
       let new_const = List.map normalize new_const in
       if List.length new_const = 0 then Top
       else
-        let new_a = Array.of_list (List.map (fun row -> Array.sub row 0 (List.length !vars)) new_const) in
+        let new_a = Array.of_list (List.map (fun row -> Array.sub row 0 (List.length vars)) new_const) in
+        let new_am = to_map new_a vars in
         let new_b = Array.of_list (List.map (fun row -> neg row.((Array.length row) - 1)) new_const) in
-        I (new_a, new_b)
+        I (new_am, new_b, vars)
 
 
-  let sing ctx model = 
-    let make_row i var = 
-      let row = Array.make (List.length !vars) (from_string "0") in
-      match (Z3.Model.get_const_interp_e model (Z3.Arithmetic.Integer.mk_const_s ctx var)) with
-      | None -> (row, from_string "0")
-      | Some e -> 
-        row.(i) <- from_string "1";
-        (row, from_string (Z3.Expr.to_string e))
+  let sing model = 
+    let decs = Z3.Model.get_decls model in
+    let vars = List.map Z3.FuncDecl.get_name decs in
+    let make_row dec = 
+      match Z3.Model.get_const_interp model dec with
+      | None -> failwith "Model without an interpretation"
+      | Some m -> S.add (Z3.FuncDecl.get_name dec) (from_string "1") S.empty, from_string (Z3.Expr.to_string m)
     in
-    let (alist, blist) = List.split (List.mapi make_row !vars) in
-    I (Array.of_list alist, Array.of_list blist)
+    let (alist, blist) = List.split (List.map make_row decs) in
+    I (Array.of_list alist, Array.of_list blist, vars)
 
 
   let gamma_hat ctx x = 
     match x with
     | Top -> Z3.Boolean.mk_true ctx
     | Bot -> Z3.Boolean.mk_false ctx
-    | I (a, b) ->
-      let z3a = Array.map (Array.map (fun v -> (Z3.Arithmetic.Integer.mk_numeral_s ctx (Mpqf.to_string v)))) a in
+    | I (m, b, vars) ->
+      let z3a = Array.map (Array.map (fun v -> (Z3.Arithmetic.Integer.mk_numeral_s ctx (Mpqf.to_string v)))) (to_matrix m vars) in
       let z3b = Array.map (fun v -> (Z3.Arithmetic.Integer.mk_numeral_s ctx (Mpqf.to_string v))) b in
       let make_exp_from_row i _ =
-        let list_prod = List.map2 (fun var const -> Z3.Arithmetic.mk_mul ctx [(Z3.Arithmetic.Integer.mk_const_s ctx var); const]) !vars (Array.to_list z3a.(i)) in
+        let list_prod = List.map2 (fun var const -> Z3.Arithmetic.mk_mul ctx [(Z3.Arithmetic.Integer.mk_const ctx var); const]) vars (Array.to_list z3a.(i)) in
         let lhs = Z3.Arithmetic.mk_add ctx list_prod in
         Z3.Boolean.mk_eq ctx lhs z3b.(i)
       in
-      Z3.Boolean.mk_and ctx (Array.to_list (Array.mapi make_exp_from_row a))
+      Z3.Boolean.mk_and ctx (Array.to_list (Array.mapi make_exp_from_row z3a))
 
 end 

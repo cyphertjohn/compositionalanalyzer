@@ -3,6 +3,8 @@ module A = Affine.Make()
 
 module ARA = Abstract.Make(A)
 
+module Logger = Log
+
 module Make (D : sig type t
                  val one : t
                  val zero : t
@@ -29,7 +31,6 @@ module Make (D : sig type t
   let analyze file = 
     let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel file) in
     D.set_vars vars;
-    A.set_vars (vars @ (List.map (fun v -> v^"'") vars));
     let summary = eval body in
     print_endline (D.to_string summary);
     (match assertion with
@@ -46,33 +47,40 @@ module Make (D : sig type t
 
 end
 
-module TR = Make(Transition.Make())
-
 module CRA = Cra.Make()
+
+let log_out_file = ref false
 
 let analyze_file in_file_name =
   let ic = open_in in_file_name in 
   let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel ic) in
   CRA.set_vars vars;
   let summary = CRA.analyze_path_exp body vars in
-  print_endline (CRA.to_string summary);
+  Logger.log_line (CRA.to_string summary);
   (match assertion with
     | None -> ()
     | Some a -> 
       if CRA.check_assert summary a then
-        print_endline("PASSED")
+        Logger.log_line "PASSED"
       else
-        print_endline("FAILED"));
+        Logger.log_line "FAILED\n");
   let (summary_form, ctx) = CRA.to_formula summary in
-  A.set_vars vars;
-  let affine_eq = ARA.alpha_from_below ~context:(ctx) summary_form in
-  print_endline ("Affine Equalities");
-  print_endline (A.to_string affine_eq);
-  close_in ic
+  Logger.log_line (Z3.Expr.to_string summary_form);
+  close_in ic;
+  if (!log_out_file) then close_out !Logger.chan
+  else ()
 
 
+
+let setOut fileName = 
+  log_out_file := true;
+  Logger.set_chan (open_out fileName);;
+     
+ 
 let register () = 
-  let speclist = [] in
+  let speclist = [("-o", Arg.String setOut, "Set an output file"); 
+                  ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
+                  ("-time", Arg.Set Logger.log_times, "Log execution times")] in
   let usage = "analyzer.native <while-file>" in
   Arg.parse speclist analyze_file usage
 
