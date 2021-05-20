@@ -59,7 +59,7 @@ open PathExp
     | [] -> []
     | h :: t -> h::(remove_dups (List.filter (fun x -> x<>h)t))
 
-  let get_vars form = 
+  let get_vars_form form = 
     let rec aux e = 
       let e_ast = Z3.Expr.ast_of_expr e in
       if Z3.AST.is_var e_ast then []
@@ -77,8 +77,17 @@ open PathExp
     remove_dups (aux form)
 
   let transform_vars tr = 
-    let variables = ST.fold (fun _ term acc -> (get_vars term) @ acc) tr.transform [] in
+    let variables = ST.fold (fun _ term acc -> (get_vars_form term) @ acc) tr.transform [] in
     remove_dups variables
+
+  let transform_vars_all tr = 
+    let variables = ST.fold (fun v term acc -> v :: (get_vars_form term) @ acc) tr.transform [] in
+    remove_dups variables
+
+  let get_vars tr = 
+    let tr_vars = transform_vars_all tr in
+    let guard_vars = get_vars_form tr.guard in
+    List.filter (fun v -> List.mem v !vars) (remove_dups (tr_vars @ guard_vars))
 
   let elim_quantifiers_form_light form = 
     let qe_light = Z3.Tactic.mk_tactic ctx "qe-light" in
@@ -105,7 +114,7 @@ open PathExp
 
   let elim_skolem_light tr = 
     let tr_vars = transform_vars tr in
-    let guard_vars = get_vars tr.guard in
+    let guard_vars = get_vars_form tr.guard in
     let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
     let projected_guard = project_vars tr.guard vars_to_remove in
     {transform = tr.transform; guard = elim_quantifiers_form_light projected_guard}
@@ -113,7 +122,7 @@ open PathExp
 
   let elim_skolem tr = 
     let tr_vars = transform_vars tr in
-    let guard_vars = get_vars tr.guard in
+    let guard_vars = get_vars_form tr.guard in
     let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
     let projected_guard = project_vars tr.guard vars_to_remove in
     {transform = tr.transform; guard = elim_quantifiers_form projected_guard}
@@ -121,13 +130,13 @@ open PathExp
 
   let simplify_guard tr = 
     let tr_vars = transform_vars tr in
-    let guard_vars = get_vars tr.guard in
+    let guard_vars = get_vars_form tr.guard in
     let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
     {transform = tr.transform; guard = project_vars tr.guard vars_to_remove}
 
   let make_fresh_skolems tr = 
     let tr_vars =  transform_vars tr in
-    let guard_vars = get_vars tr.guard in
+    let guard_vars = get_vars_form tr.guard in
     let skolem_vars = List.filter (fun v -> not (List.mem v !vars)) (remove_dups (tr_vars @ guard_vars)) in
     let fresh_vars = List.map (fun _ -> make_fresh "mid") skolem_vars in
     let subst f = Z3.Expr.substitute f (List.map (Z3.Arithmetic.Integer.mk_const_s ctx) skolem_vars) fresh_vars in
@@ -160,7 +169,7 @@ open PathExp
     let guard = Z3.Boolean.mk_or ctx [(Z3.Boolean.mk_and ctx (left.guard :: (!left_eq))); (Z3.Boolean.mk_and ctx (right.guard :: (!right_eq)))] in
     {transform; guard}
 
-  let mul x y = (*needs to be fixed*)
+  let mul x y =
     let y = make_fresh_skolems y in
     let left_subst = 
       let sub_pairs = ref [] in
@@ -273,11 +282,8 @@ open PathExp
           Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const_s ctx v)
         ) !vars in
     let form = (Z3.Boolean.mk_and ctx (guard :: transforms)) in
-    Logger.log_line ~level:`debug (Z3.Expr.to_string form);
-    let form_vars = get_vars form in
-    Logger.log_line ~level:`debug ("Form vars:" ^ (String.concat " " form_vars));
+    let form_vars = get_vars_form form in
     let p_vars = List.map (fun v -> ST.find v !prime_table) !vars in
-    Logger.log_line ~level:`debug ("Prime vars:" ^ (String.concat " " p_vars));
     let skolem_vars = List.filter (fun v -> (not (List.mem v !vars)) && not (List.mem v p_vars)) form_vars in
     (project_vars form skolem_vars, ctx)
 
@@ -293,19 +299,21 @@ open PathExp
     (*let (form, _) = to_formula tr in
     Z3.Expr.to_string (Z3.Expr.simplify form None)*)
 
-  let rec_sol_to_tr rec_sol = 
+  let rec_sol_to_tr rec_sol loop_vars = 
     match rec_sol with
     | EmptySol -> 
       let transform = ref ST.empty in
-      List.iter (fun v -> transform := ST.add v (make_havoc ()) !transform) !vars;
+      List.iter (fun v -> transform := ST.add v (make_havoc ()) !transform) loop_vars;
       let guard = Z3.Boolean.mk_true ctx in
       {transform = !transform; guard}
     | InfeasibleSol ->
       {transform = ST.empty; guard = Z3.Boolean.mk_false ctx}
     | RecsSol sols ->
       let loop_counter = make_loop_counter () in
+      let summarized_vars = ref [] in
       let folder acc (RecSol (Term (Add rec_terms), Times(inc, K))) = 
         let process_var_term (trans, lhs_terms, rhs_terms) (Times (coef, var)) = 
+          summarized_vars := var :: !summarized_vars;
           let fresh = make_fresh var in
           let lhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; fresh] in
           let rhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; Z3.Arithmetic.Integer.mk_const_s ctx var] in
@@ -319,4 +327,6 @@ open PathExp
       in
       let (transform, guards) = List.fold_left folder (ST.empty, []) sols in
       let loop_counter_ge_1 = Z3.Arithmetic.mk_ge ctx loop_counter (Z3.Arithmetic.Integer.mk_numeral_i ctx 1) in
-      {transform = transform; guard = Z3.Boolean.mk_and ctx (loop_counter_ge_1 :: guards)}
+      let unsummarized_vars = List.filter (fun v -> not (List.mem v !summarized_vars)) loop_vars in
+      let transform_havoc = List.fold_left (fun acc havoc_var -> ST.add havoc_var (make_havoc ()) acc) transform unsummarized_vars in
+      {transform = transform_havoc; guard = Z3.Boolean.mk_and ctx (loop_counter_ge_1 :: guards)}

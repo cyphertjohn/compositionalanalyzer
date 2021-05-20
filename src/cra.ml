@@ -102,10 +102,9 @@ module Make () = struct
       {transform = non_quant.transform; guard = Z3.Quantifier.expr_of_quantifier quant_guard}
 *)
 
-  let extract_recs aff_eq = 
-    let prog_vars = get_prog_vars () in
+  let extract_recs aff_eq loop_vars = 
     let delta_map = ref S.empty in
-    let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) prog_vars in
+    let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) loop_vars in
     let mk_delta_eq delta =
       let lhs = Sigs.Expr.Add [Sigs.Expr.Times (1, get_prime (S.find delta !delta_map)); Sigs.Expr.Times (-1, S.find delta !delta_map)] in
       let rhs = Sigs.Expr.Add [Sigs.Expr.Times (1,  delta)] in
@@ -142,14 +141,15 @@ module Make () = struct
     | Sigs.Recurrence.Recs recurrences -> Sigs.Recurrence.RecsSol (List.map solve_rec recurrences)
 
   let star tr = 
+    let loop_vars = get_vars tr in
     let form, _ = to_formula tr in
     let pre = get_pre tr in
     let post = get_post tr in
     let not_pre = neg_pre tr in
     let aff_eq = ARA.alpha_from_below ~context:(ctx) form in
-    let recs = extract_recs aff_eq in
+    let recs = extract_recs aff_eq loop_vars in
     let sols = solve_recs recs in
-    let some_iters = rec_sol_to_tr sols in
+    let some_iters = rec_sol_to_tr sols loop_vars in
     plus not_pre (mul (mul pre some_iters) post)
 
   let rec eval p = (*Could be memoized*)
