@@ -1,7 +1,6 @@
 open Sigs
 
-module Make() = struct
-  open PathExp
+open PathExp
   open Recurrence
   open Expr
 
@@ -293,5 +292,30 @@ module Make() = struct
     (*let (form, _) = to_formula tr in
     Z3.Expr.to_string (Z3.Expr.simplify form None)*)
 
-
-end
+  let rec_sol_to_tr rec_sol = 
+    match rec_sol with
+    | EmptySol -> 
+      let transform = ref ST.empty in
+      List.iter (fun v -> transform := ST.add v (make_havoc ()) !transform) !vars;
+      let guard = Z3.Boolean.mk_true ctx in
+      {transform = !transform; guard}
+    | InfeasibleSol ->
+      {transform = ST.empty; guard = Z3.Boolean.mk_false ctx}
+    | RecsSol sols ->
+      let loop_counter = make_loop_counter () in
+      let folder acc (RecSol (Term (Add rec_terms), Times(inc, K))) = 
+        let process_var_term (trans, lhs_terms, rhs_terms) (Times (coef, var)) = 
+          let fresh = make_fresh var in
+          let lhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; fresh] in
+          let rhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; Z3.Arithmetic.Integer.mk_const_s ctx var] in
+          (ST.add var fresh trans, lhs_term :: lhs_terms, rhs_term :: rhs_terms)
+        in
+        let (transf, lhs_terms, rhs_terms) = List.fold_left process_var_term (fst acc, [], []) rec_terms in
+        let increase = Z3.Arithmetic.mk_mul ctx [loop_counter; Z3.Arithmetic.Integer.mk_numeral_i ctx inc] in
+        let lhs = Z3.Arithmetic.mk_add ctx lhs_terms in
+        let rhs = Z3.Arithmetic.mk_add ctx (increase :: rhs_terms) in
+        (transf, (Z3.Boolean.mk_eq ctx lhs rhs) :: snd acc)
+      in
+      let (transform, guards) = List.fold_left folder (ST.empty, []) sols in
+      let loop_counter_ge_1 = Z3.Arithmetic.mk_ge ctx loop_counter (Z3.Arithmetic.Integer.mk_numeral_i ctx 1) in
+      {transform = transform; guard = Z3.Boolean.mk_and ctx (loop_counter_ge_1 :: guards)}

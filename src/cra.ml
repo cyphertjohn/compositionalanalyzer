@@ -30,7 +30,7 @@ end
 
 module Make () = struct
 
-  include Transition.Make() 
+  include Transition
 
   module A = Affine.Make(Q)
 
@@ -39,7 +39,7 @@ module Make () = struct
   module S = Map.Make(String)
 
 
-  let closure aff pre post = 
+(*  let closure aff pre post = 
     let prog_vars = get_prog_vars () in
     let delta_map = ref S.empty in
     let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) prog_vars in
@@ -100,7 +100,7 @@ module Make () = struct
       let loop_sym = Z3.Symbol.mk_string ctx "K" in
       let quant_guard = Z3.Quantifier.mk_exists ctx [Z3.Arithmetic.Integer.mk_sort ctx] [loop_sym] non_quant.guard None [] [] None None in
       {transform = non_quant.transform; guard = Z3.Quantifier.expr_of_quantifier quant_guard}
-
+*)
 
   let extract_recs aff_eq = 
     let prog_vars = get_prog_vars () in
@@ -132,12 +132,26 @@ module Make () = struct
       in
       Sigs.Recurrence.Recs (Array.to_list (Array.mapi extract_rec m))
 
+  let solve_rec (Sigs.Recurrence.Rec (Sigs.Recurrence.Term rec_term, Sigs.Recurrence.Inc inc)) =
+    Sigs.Recurrence.RecSol (Sigs.Recurrence.Term rec_term, Sigs.Recurrence.Times (inc, Sigs.Recurrence.K)) 
+
+  let solve_recs recurs = 
+    match recurs with
+    | Sigs.Recurrence.Empty -> Sigs.Recurrence.EmptySol
+    | Sigs.Recurrence.Infeasible -> Sigs.Recurrence.InfeasibleSol
+    | Sigs.Recurrence.Recs recurrences -> Sigs.Recurrence.RecsSol (List.map solve_rec recurrences)
+
   let star tr = 
     let form, _ = to_formula tr in
     let pre = get_pre tr in
     let post = get_post tr in
+    let not_pre = neg_pre tr in
     let aff_eq = ARA.alpha_from_below ~context:(ctx) form in
-    closure aff_eq pre post
+    let recs = extract_recs aff_eq in
+    let sols = solve_recs recs in
+    let some_iters = rec_sol_to_tr sols in
+    plus not_pre (mul (mul pre some_iters) post)
+    (*closure aff_eq pre post*)
 
   let rec eval p = (*Could be memoized*)
     match p with

@@ -59,6 +59,19 @@ module Recurrence =
       | Infeasible
       | Recs of lin_rec list
 
+    type loop_counter = K
+
+    type additive_term_sol = 
+      | Times of int * loop_counter
+
+    type lin_rec_sol =
+      | RecSol of rec_term * additive_term_sol
+    
+    type lin_recs_sol = 
+      | EmptySol
+      | InfeasibleSol
+      | RecsSol of lin_rec_sol list
+
     let rec_to_string (Rec (Term recterm, Inc additive)) = 
       let recterm_str = Expr.linexp_to_string recterm in
       ("{" ^ recterm_str ^ "}^[k+1] = " ^ "{" ^ recterm_str ^ "}^[k] " ^ (string_of_int additive))
