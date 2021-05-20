@@ -9,25 +9,19 @@ open PathExp
 
   module ST = Map.Make(String)
 
-  let sym_table = ref ST.empty
-  let psym_table = ref ST.empty
+  let prime_table = ref ST.empty
 
   let vars = ref []
 
   let set_prog_vars variables =
     vars := variables;
-    List.iter (fun v -> let vsym = Z3.Symbol.mk_string ctx v in
-                        sym_table := ST.add v vsym !sym_table;
-                        let vpsym = Z3.Symbol.mk_string ctx (v^"'") in
-                        psym_table := ST.add v vpsym !psym_table) variables
+    List.iter (fun v -> prime_table := ST.add v (v^"'") !prime_table) variables
 
   let get_prog_vars () = !vars
 
   let curr = ref 10
 
-  let get_symbol v = ST.find v !sym_table
-
-  let get_psymbol v = ST.find v !psym_table
+  let get_prime v = ST.find v !prime_table
 
   let mk_phi v = 
     let fresh = Z3.Symbol.mk_string ctx ("phi_" ^ v ^ (string_of_int !curr)) in
@@ -149,11 +143,11 @@ open PathExp
           let left_term = 
             match x with 
             | Some s -> s
-            | None -> Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table) in
+            | None -> Z3.Arithmetic.Integer.mk_const_s ctx v in
           let right_term = 
             match y with 
             | Some t -> t
-            | None -> Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table) in
+            | None -> Z3.Arithmetic.Integer.mk_const_s ctx v in
           left_eq := (Z3.Boolean.mk_eq ctx left_term phi) :: (!left_eq);
           right_eq := (Z3.Boolean.mk_eq ctx right_term phi) :: (!right_eq);
           Some phi
@@ -167,12 +161,12 @@ open PathExp
     let y = make_fresh_skolems y in
     let left_subst = 
       let sub_pairs = ref [] in
-      ST.iter (fun v term -> sub_pairs := (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table), term) :: !sub_pairs) x.transform;
+      ST.iter (fun v term -> sub_pairs := (Z3.Arithmetic.Integer.mk_const_s ctx v, term) :: !sub_pairs) x.transform;
       List.split !sub_pairs
     in
     let guard = Z3.Boolean.mk_and ctx [x.guard; Z3.Expr.substitute y.guard (fst left_subst) (snd left_subst)] in
     let merge v left right = 
-      let new_exp = Z3.Expr.substitute right [Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table)] [left] in
+      let new_exp = Z3.Expr.substitute right [Z3.Arithmetic.Integer.mk_const_s ctx v] [left] in
       Some new_exp
     in
     let transform = ST.union merge x.transform y.transform in
@@ -181,7 +175,7 @@ open PathExp
   let rec interp_term a = 
     match a with 
     | Int n -> Z3.Arithmetic.Integer.mk_numeral_i ctx n
-    | Times (n, v) -> Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx n; Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table)]
+    | Times (n, v) -> Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx n; Z3.Arithmetic.Integer.mk_const_s ctx v]
 
   let interp_exp (Add l) = 
     if List.length l = 0 then Z3.Arithmetic.Integer.mk_numeral_i ctx 0
@@ -225,7 +219,7 @@ open PathExp
     let guard = summary.guard in
     let subst = 
       let sub_pairs = ref [] in
-      ST.iter (fun v term -> sub_pairs := (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table), term) :: !sub_pairs) transform;
+      ST.iter (fun v term -> sub_pairs := (Z3.Arithmetic.Integer.mk_const_s ctx v, term) :: !sub_pairs) transform;
       List.split !sub_pairs
     in
     let sub_assert = Z3.Expr.substitute assertion (fst subst) (snd subst) in
@@ -242,7 +236,7 @@ open PathExp
   let get_post tr =
     let make_fresh_sub (sub_pairs, new_consts) var =
       let fresh = make_fresh var in
-      let var_const = Z3.Arithmetic.Integer.mk_const ctx (ST.find var !sym_table) in
+      let var_const = Z3.Arithmetic.Integer.mk_const_s ctx var in
       let subst = (var_const, fresh) in
       let new_const = 
         try
@@ -268,12 +262,12 @@ open PathExp
     let guard = tr.guard in
     let transforms = List.map
       (fun v -> 
-        let vp = Z3.Arithmetic.Integer.mk_const ctx (ST.find v !psym_table) in
+        let vp = Z3.Arithmetic.Integer.mk_const_s ctx (ST.find v !prime_table) in
         try 
           let term = ST.find v transform in
           Z3.Boolean.mk_eq ctx vp term
         with Not_found -> 
-          Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const ctx (ST.find v !sym_table))
+          Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const_s ctx v)
         ) !vars in
     let form = (Z3.Boolean.mk_and ctx (guard :: transforms)) in
     let form_vars = get_vars form in
