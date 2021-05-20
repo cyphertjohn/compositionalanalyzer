@@ -1,6 +1,6 @@
 module Logger = Log
 
-module Make (A : Sigs.IDomain) = struct
+module Make (A : Sigs.Domain) = struct
   
   open A
 

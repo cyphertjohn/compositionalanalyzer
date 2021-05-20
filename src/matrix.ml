@@ -86,4 +86,24 @@ module Make (A : Sigs.Rational) = struct
       curr_col := !curr_col + 1;
     done;
     (a, t, p)
+
+  let get_mat_widths mat = 
+    let n = Array.length mat.(0) in
+    Array.fold_left (fun acc row -> Array.map2 (fun x y -> max x y) acc row) (Array.make n (-1)) (Array.map (fun row -> Array.map (fun v -> String.length (A.to_string v)) row) mat) 
+      
+  let mat_row_to_string row widths = 
+    let el_to_string i v = 
+      let val_str = A.to_string v in
+      let val_len = String.length val_str in
+      let spaces = String.make (widths.(i) - val_len) ' ' in
+      if i = 0 then spaces ^ val_str
+        else " " ^ spaces ^ val_str
+      in
+      "|" ^ (String.concat " " (Array.to_list (Array.mapi el_to_string row))) ^ "|" 
+  
+  let matrix_to_string m = 
+    let mw = get_mat_widths m in
+    String.concat "\n" (Array.to_list (Array.mapi (fun i _ -> mat_row_to_string m.(i) mw) m))
+
+  
 end

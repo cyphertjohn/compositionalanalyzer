@@ -1,4 +1,5 @@
 open Sigs
+module Logger = Log
 
 open PathExp
   open Recurrence
@@ -15,7 +16,7 @@ open PathExp
 
   let set_prog_vars variables =
     vars := variables;
-    List.iter (fun v -> prime_table := ST.add v (v^"'") !prime_table) variables
+    List.iter (fun v -> prime_table := ST.add v (v^"p") !prime_table) variables
 
   let get_prog_vars () = !vars
 
@@ -64,8 +65,10 @@ open PathExp
       if Z3.AST.is_var e_ast then []
       else if Z3.AST.is_quantifier e_ast then aux (Z3.Quantifier.get_body (Z3.Quantifier.quantifier_of_expr e))
       else if Z3.Expr.is_const e then 
-        let var = Z3.Expr.to_string e in
-        [var]
+        if Z3.Boolean.is_true e || Z3.Boolean.is_false e then []
+        else
+          let var = Z3.Expr.to_string e in
+          [var]
       else
         let args = Z3.Expr.get_args e in
         if List.length args = 0 then []
@@ -270,12 +273,16 @@ open PathExp
           Z3.Boolean.mk_eq ctx vp (Z3.Arithmetic.Integer.mk_const_s ctx v)
         ) !vars in
     let form = (Z3.Boolean.mk_and ctx (guard :: transforms)) in
+    Logger.log_line ~level:`debug (Z3.Expr.to_string form);
     let form_vars = get_vars form in
-    let skolem_vars = List.filter (fun v -> not (List.mem v !vars)) form_vars in
+    Logger.log_line ~level:`debug ("Form vars:" ^ (String.concat " " form_vars));
+    let p_vars = List.map (fun v -> ST.find v !prime_table) !vars in
+    Logger.log_line ~level:`debug ("Prime vars:" ^ (String.concat " " p_vars));
+    let skolem_vars = List.filter (fun v -> (not (List.mem v !vars)) && not (List.mem v p_vars)) form_vars in
     (project_vars form skolem_vars, ctx)
 
   let to_string tr = 
-    let tr_simp = elim_skolem_light tr in
+    let tr_simp = (*elim_skolem_light*) tr in
     let transform = tr_simp.transform in
     let transform_list = ref [] in
     ST.iter (fun v term -> 

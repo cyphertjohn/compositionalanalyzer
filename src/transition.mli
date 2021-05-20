@@ -1,9 +1,15 @@
+(**Semiring of transition formulas.*)
+
+(**The context used for all calculations in this module.*)
 val ctx : Z3.context
+(**A transition formula.*)
 type t
-val get_prog_vars : unit -> string list
+(**Set the set of program variables.*)
 val set_prog_vars : string list -> unit
-val get_symbol : string -> Z3.Symbol.symbol
-val get_psymbol : string -> Z3.Symbol.symbol
+(**Access the program variables.*)
+val get_prog_vars : unit -> string list
+(**Given a program variable, returns the string representation of its primed counterpart.*)
+val get_prime : string -> string
 val zero : t
 val one : t
 val plus : t -> t -> t

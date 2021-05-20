@@ -115,7 +115,7 @@ module type Rational =
     val z_of_string : string -> z
 end
 
-module type IDomain =
+module type Domain =
   sig
     type t
     val bot : t

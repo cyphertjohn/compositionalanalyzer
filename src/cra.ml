@@ -107,7 +107,7 @@ module Make () = struct
     let delta_map = ref S.empty in
     let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) prog_vars in
     let mk_delta_eq delta =
-      let lhs = Sigs.Expr.Add [Sigs.Expr.Times (1, Z3.Symbol.get_string (get_psymbol (S.find delta !delta_map))); Sigs.Expr.Times (-1, Z3.Symbol.get_string (get_symbol (S.find delta !delta_map)))] in
+      let lhs = Sigs.Expr.Add [Sigs.Expr.Times (1, get_prime (S.find delta !delta_map)); Sigs.Expr.Times (-1, S.find delta !delta_map)] in
       let rhs = Sigs.Expr.Add [Sigs.Expr.Times (1,  delta)] in
       Sigs.Expr.Equal (lhs, rhs)
     in
@@ -151,7 +151,6 @@ module Make () = struct
     let sols = solve_recs recs in
     let some_iters = rec_sol_to_tr sols in
     plus not_pre (mul (mul pre some_iters) post)
-    (*closure aff_eq pre post*)
 
   let rec eval p = (*Could be memoized*)
     match p with
