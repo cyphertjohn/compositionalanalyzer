@@ -1,13 +1,6 @@
 module Logger = Log
 
-module Make (A : sig 
-              type t
-              val bot : t
-              val sing : Z3.Model.model -> t
-              val gamma_hat : Z3.context -> t -> Z3.Expr.expr
-              val join : t -> t -> t 
-              val to_string : t -> string
-            end) = struct
+module Make (A : Sigs.IDomain) = struct
   
   open A
 

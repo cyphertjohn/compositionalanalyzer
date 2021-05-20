@@ -10,4 +10,3 @@ doc:
 
 clean:
 	$(OCB) -clean
-	rm abstract.top
