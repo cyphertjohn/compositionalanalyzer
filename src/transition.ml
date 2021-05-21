@@ -5,13 +5,16 @@ open PathExp
   open Recurrence
   open Expr
 
-
+  (*The Z3 context to be used for all Z3 manipulations.*)
   let ctx = Z3.mk_context []
 
+  (*String map for various things.*)
   module ST = Map.Make(String)
 
+  (*For each program variable we keep track of a string representation of its prime counterpart.*)
   let prime_table = ref ST.empty
 
+  (*The list of program variables.*)
   let vars = ref []
 
   let set_prog_vars variables =
@@ -20,16 +23,22 @@ open PathExp
 
   let get_prog_vars () = !vars
 
+  (*A counter to generate unique names for skolem variables.*)
   let curr = ref 10
 
   let get_prime v = ST.find v !prime_table
 
+  (*A map to keep track of the phi variables and their associated program variables. Just here to make the output look nicer.
+  A phi variables looks like phi_x10. The map will have phi_x10 -> x.*)
   let phi_vars = ref ST.empty
 
+  (*The same as phi_vars but for other skolem vars and for the same purpose.*)
   let var_skolems = ref ST.empty
 
+  (*Same as previous but we just keep track of a list of loop counter vars.*)
   let loop_counters = ref []
 
+  (*make a fresh phi const*)
   let mk_phi v = 
     let var_string = "phi_" ^ v ^ (string_of_int !curr) in
     phi_vars := ST.add var_string v !phi_vars;
@@ -37,12 +46,13 @@ open PathExp
     curr := !curr + 1;
     Z3.Arithmetic.Integer.mk_const ctx fresh
 
+  (*make a havoc const*)
   let make_havoc () =
     let sym = Z3.Symbol.mk_string ctx ("havoc_" ^ (string_of_int !curr)) in
     curr := !curr + 1;
     Z3.Arithmetic.Integer.mk_const ctx sym
   
-    
+  (*make a fresh skolem var*)
   let make_fresh v = 
     let var_string = v ^"!" ^ (string_of_int !curr) in
     var_skolems := ST.add var_string v !var_skolems;
@@ -50,6 +60,7 @@ open PathExp
     curr := !curr + 1;
     Z3.Arithmetic.Integer.mk_const ctx sym
 
+  (*make a fresh loop counter*)
   let make_loop_counter () =
     let var_string = "K!" ^ (string_of_int !curr) in
     let sym = Z3.Symbol.mk_string ctx var_string in
@@ -58,19 +69,33 @@ open PathExp
     Z3.Arithmetic.Integer.mk_const ctx sym
 
 
+  (*A transition represents a transition formula as follows:
+    - The guard is a formula over program variables and skolem variables. The guard constrains pre-state vars and
+      variables used in the transform.
+    - The transform represents a map from "prime" vars to a Z3 expression which represents the post-state of that variable.
+    The way to read a transition is if the guard holds, then the post state of the vars in the transform is equal to what that
+    variable maps to. If a variable is not present in the transform it is implicit that the post-state of that variable is equal
+    to the pre-state.
+    
+    For example the transition
+      transform {x -> x + 1, y -> y!52}
+      guard: x < 10 /\ z = 0 /\ y!52 + havoc!42 = y + x + 1
+      corresponds to the transition formula:
+      exists y!52 havoc!42
+      x' = x + 1 /\ y' = y!52 /\ z' = z /\ x < 10 /\ z = 0 /\ y!52 + havoc!42 = y + x + 1
+    *)
   type t = { transform : Z3.Expr.expr ST.t;
-             guard : Z3.Expr.expr;
-             (*phi_vars : Z3.Expr.expr ST.t;
-             skolem_vars : Z3.Expr.expr ST.t*)}
+             guard : Z3.Expr.expr}
 
-  let zero = {transform = ST.empty; guard = Z3.Boolean.mk_false ctx(*; phi_vars = ST.empty; skolem_vars = ST.empty*)}
-  let one = {transform = ST.empty; guard = Z3.Boolean.mk_true ctx(*; phi_vars = ST.empty; skolem_vars = ST.empty*)}
+  let zero = {transform = ST.empty; guard = Z3.Boolean.mk_false ctx}
+  let one = {transform = ST.empty; guard = Z3.Boolean.mk_true ctx}
 
   let rec remove_dups l = 
     match l with
     | [] -> []
     | h :: t -> h::(remove_dups (List.filter (fun x -> x<>h)t))
 
+  (*Traverse a Z3 expression for constant names. Warning Z3 will crash if you ask is_const on a quantifier.*)
   let get_vars_form form = 
     let rec aux e = 
       let e_ast = Z3.Expr.ast_of_expr e in
@@ -101,6 +126,7 @@ open PathExp
     let guard_vars = get_vars_form tr.guard in
     List.filter (fun v -> List.mem v !vars) (remove_dups (tr_vars @ guard_vars))
 
+  (*Eliminate quantifiers from a formula using Z3 tactic "qe-light". Can get expensive.*)
   let elim_quantifiers_form_light form = 
     let qe_light = Z3.Tactic.mk_tactic ctx "qe-light" in
     let g = Z3.Goal.mk_goal ctx false false false in
@@ -109,6 +135,7 @@ open PathExp
     let sgs = Z3.Tactic.ApplyResult.get_subgoals ar in
     Z3.Expr.simplify (Z3.Boolean.mk_and ctx (List.map Z3.Goal.as_expr sgs)) None
 
+  (*Eliminate quantifiers from a formula using Z3 tactic "qe". Can get expensive.*)
   let elim_quantifiers_form form = 
     let qe = Z3.Tactic.mk_tactic ctx "qe" in
     let g = Z3.Goal.mk_goal ctx false false false in
@@ -117,6 +144,7 @@ open PathExp
     let sgs = Z3.Tactic.ApplyResult.get_subgoals ar in
     Z3.Expr.simplify (Z3.Boolean.mk_and ctx (List.map Z3.Goal.as_expr sgs)) None
 
+  (*Quantify out a set of variables*)
   let project_vars form variables = 
     let var_symbols = List.map (fun v -> Z3.Symbol.mk_string ctx v) variables in
     let bound_vars = List.mapi (fun i _ -> Z3.Quantifier.mk_bound ctx i (Z3.Arithmetic.Integer.mk_sort ctx)) var_symbols in
@@ -124,14 +152,15 @@ open PathExp
     let quant = Z3.Quantifier.mk_exists ctx (List.map (fun _ -> Z3.Arithmetic.Integer.mk_sort ctx) bound_vars) var_symbols subst_form None [] [] None None in
     Z3.Expr.simplify (Z3.Quantifier.expr_of_quantifier quant) None
 
+  (*Eliminate skolem vars that are only in the guard.*)
   let elim_skolem_light tr = 
     let tr_vars = transform_vars tr in
     let guard_vars = get_vars_form tr.guard in
     let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
     let projected_guard = project_vars tr.guard vars_to_remove in
     {transform = tr.transform; guard = elim_quantifiers_form_light projected_guard}
-
-
+  
+  (*Same as previous but with full qe.*)
   let elim_skolem tr = 
     let tr_vars = transform_vars tr in
     let guard_vars = get_vars_form tr.guard in
@@ -139,19 +168,14 @@ open PathExp
     let projected_guard = project_vars tr.guard vars_to_remove in
     {transform = tr.transform; guard = elim_quantifiers_form projected_guard}
 
-
-  let simplify_guard tr = 
-    let tr_vars = transform_vars tr in
-    let guard_vars = get_vars_form tr.guard in
-    let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
-    {transform = tr.transform; guard = project_vars tr.guard vars_to_remove}
-
+  (*These might not actually simplify the transition. qe might make things messier.*)
   let simplify tr =
     elim_skolem tr
 
   let simplify_light tr =
     elim_skolem_light tr
 
+  (*It is possible when combining formulas that names may clash. So this takes all non-program variables and creates fresh copies.*)
   let make_fresh_skolems tr = 
     let tr_vars =  transform_vars tr in
     let guard_vars = get_vars_form tr.guard in
@@ -175,6 +199,9 @@ open PathExp
         match x, y with
         | Some s, Some t when Z3.Expr.equal s t -> Some s
         | _, _ ->
+          (*In this case the left transition and the right transition for v will give different values.
+            So we introduce a phi var for the transform and set the left and right transforms equal to phi
+            and put in the guard with a disjunction.*)
           let phi = mk_phi v in
           let left_term = 
             match x with 
@@ -193,6 +220,7 @@ open PathExp
     let guard = Z3.Boolean.mk_or ctx [(Z3.Boolean.mk_and ctx (left.guard :: (!left_eq))); (Z3.Boolean.mk_and ctx (right.guard :: (!right_eq)))] in
     {transform; guard}
 
+  (*To extend we must substitute the rhs of the transforms of x in for the pre-state program vars of y.*)
   let mul x y =
     let y = make_fresh_skolems y in
     let left_subst = 
@@ -208,6 +236,7 @@ open PathExp
     let transform = ST.union merge x.transform y.transform in
     {transform; guard}
 
+  (*The next few functions interpret types from Sigs as transitions.*)
   let rec interp_term a = 
     match a with 
     | Int n -> Z3.Arithmetic.Integer.mk_numeral_i ctx n
@@ -249,6 +278,7 @@ open PathExp
       let transform = ST.empty in
       {guard; transform}
 
+  (*To check and assertion we negate the assertion and check for unsatisfiability.*)
   let check_assert summary asser = 
     let assertion = interp_c asser in
     let transform = summary.transform in
@@ -266,11 +296,15 @@ open PathExp
     | Z3.Solver.UNSATISFIABLE -> true
     | _ -> false
 
+  (*The pre-state of a transition is the guard. Simplifying here tends to make the output more readible.*)
   let get_pre tr = 
-    elim_skolem {transform = ST.empty; guard = tr.guard}
+    simplify {transform = ST.empty; guard = tr.guard}
 
+  (*To get the post-state we substitute fresh skolem vars for each pre-state var, and then set the pre-state vars
+    equal to the new fresh skolem var.*)
   let get_post tr =
-    let make_fresh_sub (sub_pairs, new_consts) var =
+    let tr_vars = get_vars tr in
+    let make_fresh_sub (sub_pairs, new_constraints) var =
       let fresh = make_fresh var in
       let var_const = Z3.Arithmetic.Integer.mk_const_s ctx var in
       let subst = (var_const, fresh) in
@@ -281,18 +315,19 @@ open PathExp
         with Not_found ->
           []
       in
-      (subst :: sub_pairs, new_const @ new_consts)
+      (subst :: sub_pairs, new_const @ new_constraints)
     in
-    let (sub_pairs, new_consts) = List.fold_left make_fresh_sub ([], []) !vars in
+    let (sub_pairs, new_constraints) = List.fold_left make_fresh_sub ([], []) tr_vars in
     let (var_const, fresh_vars) = List.split sub_pairs in
     let proj_guard = Z3.Expr.substitute tr.guard var_const fresh_vars in
-    elim_skolem {transform = ST.empty; guard = Z3.Boolean.mk_and ctx (proj_guard :: new_consts)}
+    simplify {transform = ST.empty; guard = Z3.Boolean.mk_and ctx (proj_guard :: new_constraints)}
 
 
   let neg_pre tr = 
     {transform = ST.empty; guard = Z3.Boolean.mk_not ctx tr.guard}
 
-
+  (*Convert a transition to a transition formula by setting prime variables equal to transforms if available or x'=x otherwise.
+    We then project out any other variable that is not a program or prime variable.*)
   let to_formula tr =
     let transform = tr.transform in
     let guard = tr.guard in
@@ -320,12 +355,12 @@ open PathExp
     let transform_str = String.concat "\n" !transform_list in
     let guard_str = Z3.Expr.to_string (Z3.Expr.simplify tr_simp.guard None) in
     transform_str ^ "\nwhen " ^ guard_str
-    (*let (form, _) = to_formula tr in
-    Z3.Expr.to_string (Z3.Expr.simplify form None)*)
 
+  (*Convert a recurrence solution to a transition.*)
   let rec_sol_to_tr rec_sol loop_vars = 
     match rec_sol with
     | EmptySol -> 
+      (*If the solution is empty, we know nothing and must havoc all the loop_vars.*)
       let transform = ref ST.empty in
       List.iter (fun v -> transform := ST.add v (make_havoc ()) !transform) loop_vars;
       let guard = Z3.Boolean.mk_true ctx in
@@ -352,5 +387,6 @@ open PathExp
       let (transform, guards) = List.fold_left folder (ST.empty, []) sols in
       let loop_counter_ge_1 = Z3.Arithmetic.mk_ge ctx loop_counter (Z3.Arithmetic.Integer.mk_numeral_i ctx 1) in
       let unsummarized_vars = List.filter (fun v -> not (List.mem v !summarized_vars)) loop_vars in
+      (*We must havoc any variable that was not summarized in the solution.*)
       let transform_havoc = List.fold_left (fun acc havoc_var -> ST.add havoc_var (make_havoc ()) acc) transform unsummarized_vars in
       {transform = transform_havoc; guard = Z3.Boolean.mk_and ctx (loop_counter_ge_1 :: guards)}

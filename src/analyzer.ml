@@ -14,18 +14,16 @@ let analyze_file in_file_name =
   let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel ic) in
   CRA.set_prog_vars vars;
   let summary = CRA.simplify_light (CRA.analyze_path_exp body vars) in
+  Logger.log_line "Program summary:";
   Logger.log_line (CRA.to_string summary);
+  Logger.log_line "";
   (match assertion with
     | None -> ()
     | Some a -> 
       if CRA.check_assert summary a then
-        Logger.log_line "PASSED"
+        Logger.log_line "Assertion PASSED"
       else
-        Logger.log_line "FAILED\n");
-  (*let (summary_form, ctx) = CRA.to_formula summary in
-  Logger.log_line ~level:`debug (Z3.Expr.to_string summary_form);
-  Logger.log_line ~level:`debug "Affine Eqs:";
-  Logger.log_line ~level:`debug (A.to_string (ARA.alpha_from_below ctx summary_form));*)
+        Logger.log_line "Assertion FAILED\n");
   close_in ic;
   if (!log_out_file) then Logger.close ()
   else ()

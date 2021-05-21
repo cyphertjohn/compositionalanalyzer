@@ -92,8 +92,9 @@ module Make () = struct
     (*let not_pre = neg_pre tr in*)
     let aff_eq = ARA.alpha_from_below ctx form in
     let recs = extract_recs aff_eq loop_vars in
-    Logger.log_line ~level:`debug ("Recs:");
-    Logger.log_line ~level:`debug (Recurrence.recs_to_string recs);
+    Logger.log_line ("Loop Body Recs:");
+    Logger.log_line (Recurrence.recs_to_string recs);
+    Logger.log_line "";
     let sols = solve_recs recs in
     let some_iters = rec_sol_to_tr sols loop_vars in
     plus one (mul (mul pre some_iters) post)

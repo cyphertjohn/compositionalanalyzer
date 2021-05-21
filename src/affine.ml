@@ -2,19 +2,28 @@ module Logger = Log
 
 module Make (A : Sigs.Rational) = struct
 
+  (*Implementation of rational arithmetic*)
   open A
 
+  (*Matrix module, which will be used to compute rref.*)
   module MA = Matrix.Make(A)
 
   open MA
 
+  (*Map module that will be used to map variables to coefficients.*)
   module S = Map.Make(String)
 
+  (*A domain element is either top, bottom, or a set of affine equalities. Each set of equalities, [I(m, b, vars)], represents the following: 
+      - [m] and [b] are arrays of the same length. For each [i], [m.(i)] is a map from variables to coeficients, and [b.(i)] is the rhs of the equality. 
+      Thus suppose [m.(i)] consists of the mapping [x] -> [2] and [y] -> [1] with [b.(i) = 2], then the i'th equality is {i 2x + 1y = 2}.
+      - [vars] is a list of variables captured by the domain element.
+      *)
   type t = 
     | Bot
     | Top
     | I of A.q S.t array * A.q array * string list
 
+  (*Converts a coefficient map to a matrix.*)
   let to_matrix coef_map vars = 
     let n = List.length vars in
     let build_row row_map = 
@@ -30,6 +39,7 @@ module Make (A : Sigs.Rational) = struct
     in
     Array.map build_row coef_map
 
+  (*Convert from a matrix back to a map.*)
   let to_map matrix vars =
     let var_pos = List.mapi (fun i v -> (i, v)) vars in
     let build_row row = 
@@ -55,6 +65,7 @@ module Make (A : Sigs.Rational) = struct
       in
       String.concat "\n" (Array.to_list (Array.mapi row map))
     
+  (*Computes the union of two lists.*)
   let merge_vars vl1 vl2 =
     let (sortvl1, sortvl2) = (List.sort compare vl1, List.sort compare vl2) in
     let rec aux l1 l2 acc =
@@ -68,6 +79,7 @@ module Make (A : Sigs.Rational) = struct
       in
     aux sortvl1 sortvl2 []
 
+  (*We can project variables out of a set of affine equations.*)
   let project el vars_to_keep = 
     match el with
     | Top -> Top
@@ -75,8 +87,10 @@ module Make (A : Sigs.Rational) = struct
     | I (m, b, vars) ->
       let (_, vars_to_remove) = List.partition (fun v -> List.mem v vars_to_keep) vars in
       let a = to_matrix m (vars_to_remove @ vars_to_keep) in
+      (*Based on the order of the variables in a, a_neg_b is set up to put the variables to keep on the rhs of the matrix.*)
       let a_neg_b = Array.mapi (fun i arow -> Array.append arow (Array.make 1 (neg b.(i)))) a in
       let (r, _, _) = rref a_neg_b in
+      (*By the properties of rref r is equivalent to a_neg_b but the bottom rows only reference the variables to be kept.*)
       let keep_row row = 
         let leading_zeros = Array.for_all is_zero (Array.sub row 0 (List.length vars_to_remove)) in
         if leading_zeros then
@@ -98,6 +112,13 @@ module Make (A : Sigs.Rational) = struct
     | (_, Top) -> Top
     | (Bot, _) -> y
     | (_, Bot) -> x
+    (*Let a1 be the matrix of m1 and a2 the matrix of m2. We will construct the following matrix:
+    [  1   1  0  0 0 -1
+     -b1   0 a1  0 0  0
+       0 -b2  0 a2 0  0
+       0   0 -I -I I  0]
+      compute rref and project to the vars + 1 dimensions on the right.
+    *)
     | (I (m1, b1, vars1), I (m2, b2, vars2)) -> 
       let vars = merge_vars vars1 vars2 in
       let a1 = to_matrix m1 vars in
@@ -147,6 +168,8 @@ module Make (A : Sigs.Rational) = struct
         let new_b = Array.of_list (List.map (fun row -> neg row.((Array.length row) - 1)) new_const) in
         I (new_am, new_b, vars)
 
+  (*Converts a list of linear equations to a set of affine equations. 
+  Note, if the equations are inconsistent then the result will not be bot, but instead a set of inconsistent equalities.*)
   let eqs_to_t l =
     let eq_to_t (Sigs.Expr.Equal (lhs, rhs)) = 
       let add_term_to_map is_rhs coef var map =
@@ -193,6 +216,9 @@ module Make (A : Sigs.Rational) = struct
     | (_, Bot) -> Bot
     | (Top, _) -> y
     | (_, Top) -> x
+    (*To compute the meet let a1 and a2 be the matrices of m1 and m2. We construct
+     [a1 -b1
+      a2 -b2] and reduce. Reducing just detects inconsistencies and eliminates redundant equations.*)
     | (I(m1, b1, vars1), I(m2, b2, vars2)) ->
       let variables = merge_vars vars1 vars2 in
       let a1 = to_matrix m1 variables in
