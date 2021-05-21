@@ -47,11 +47,13 @@ module Make (A : Sigs.Rational) = struct
     | Bot -> "Bot"
     | Top -> "Top"
     | I (map, b, vars) -> 
-      let a = to_matrix map vars in
-      let row i = 
-        String.concat "+" (List.map2 (fun var x -> (to_string x) ^ var) vars (Array.to_list a.(i))) ^ " == " ^ (to_string b.(i))
+      let row i coef_map = 
+        if S.cardinal coef_map = 0 then "0 == " ^ (to_string b.(i))
+        else 
+          let term_list = (S.fold (fun var coef acc -> ((to_string coef) ^ var) :: acc) coef_map []) in
+          (String.concat "+" term_list) ^ " == " ^ (to_string b.(i))
       in
-      String.concat "\n" (Array.to_list (Array.mapi (fun r _ -> row r) a))
+      String.concat "\n" (Array.to_list (Array.mapi row map))
     
   let merge_vars vl1 vl2 =
     let (sortvl1, sortvl2) = (List.sort compare vl1, List.sort compare vl2) in

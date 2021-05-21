@@ -24,10 +24,18 @@ open PathExp
 
   let get_prime v = ST.find v !prime_table
 
+  let phi_vars = ref ST.empty
+
+  let var_skolems = ref ST.empty
+
+  let loop_counters = ref []
+
   let mk_phi v = 
-    let fresh = Z3.Symbol.mk_string ctx ("phi_" ^ v ^ (string_of_int !curr)) in
+    let var_string = "phi_" ^ v ^ (string_of_int !curr) in
+    phi_vars := ST.add var_string v !phi_vars;
+    let fresh = Z3.Symbol.mk_string ctx var_string in
     curr := !curr + 1;
-    fresh
+    Z3.Arithmetic.Integer.mk_const ctx fresh
 
   let make_havoc () =
     let sym = Z3.Symbol.mk_string ctx ("havoc_" ^ (string_of_int !curr)) in
@@ -36,12 +44,16 @@ open PathExp
   
     
   let make_fresh v = 
-    let sym = Z3.Symbol.mk_string ctx (v ^"!" ^ (string_of_int !curr)) in
+    let var_string = v ^"!" ^ (string_of_int !curr) in
+    var_skolems := ST.add var_string v !var_skolems;
+    let sym = Z3.Symbol.mk_string ctx var_string in
     curr := !curr + 1;
     Z3.Arithmetic.Integer.mk_const ctx sym
 
   let make_loop_counter () =
-    let sym = Z3.Symbol.mk_string ctx ("K" ^ (string_of_int !curr)) in
+    let var_string = "K!" ^ (string_of_int !curr) in
+    let sym = Z3.Symbol.mk_string ctx var_string in
+    loop_counters := var_string :: !loop_counters;
     curr := !curr + 1;
     Z3.Arithmetic.Integer.mk_const ctx sym
 
@@ -134,11 +146,24 @@ open PathExp
     let (_, vars_to_remove) = List.partition (fun v -> List.mem v tr_vars || List.mem v !vars) guard_vars in
     {transform = tr.transform; guard = project_vars tr.guard vars_to_remove}
 
+  let simplify tr =
+    elim_skolem tr
+
+  let simplify_light tr =
+    elim_skolem_light tr
+
   let make_fresh_skolems tr = 
     let tr_vars =  transform_vars tr in
     let guard_vars = get_vars_form tr.guard in
     let skolem_vars = List.filter (fun v -> not (List.mem v !vars)) (remove_dups (tr_vars @ guard_vars)) in
-    let fresh_vars = List.map (fun _ -> make_fresh "mid") skolem_vars in
+    let make_fresh_var var =
+      if ST.mem var !phi_vars then mk_phi (ST.find var !phi_vars)
+      else if ST.mem var !var_skolems then make_fresh (ST.find var !var_skolems)
+      else if List.mem var !loop_counters then make_loop_counter ()
+      else
+        make_havoc ()
+    in
+    let fresh_vars = List.map make_fresh_var skolem_vars in
     let subst f = Z3.Expr.substitute f (List.map (Z3.Arithmetic.Integer.mk_const_s ctx) skolem_vars) fresh_vars in
     {transform = ST.map (fun term -> subst term) tr.transform; guard = subst tr.guard}
 
@@ -150,8 +175,7 @@ open PathExp
         match x, y with
         | Some s, Some t when Z3.Expr.equal s t -> Some s
         | _, _ ->
-          let phi_s = mk_phi v in
-          let phi = Z3.Arithmetic.Integer.mk_const ctx phi_s in
+          let phi = mk_phi v in
           let left_term = 
             match x with 
             | Some s -> s
@@ -243,7 +267,7 @@ open PathExp
     | _ -> false
 
   let get_pre tr = 
-    {transform = ST.empty; guard = tr.guard}
+    elim_skolem {transform = ST.empty; guard = tr.guard}
 
   let get_post tr =
     let make_fresh_sub (sub_pairs, new_consts) var =
@@ -262,7 +286,7 @@ open PathExp
     let (sub_pairs, new_consts) = List.fold_left make_fresh_sub ([], []) !vars in
     let (var_const, fresh_vars) = List.split sub_pairs in
     let proj_guard = Z3.Expr.substitute tr.guard var_const fresh_vars in
-    {transform = ST.empty; guard = Z3.Boolean.mk_and ctx (proj_guard :: new_consts)}
+    elim_skolem {transform = ST.empty; guard = Z3.Boolean.mk_and ctx (proj_guard :: new_consts)}
 
 
   let neg_pre tr = 
@@ -288,7 +312,7 @@ open PathExp
     (project_vars form skolem_vars, ctx)
 
   let to_string tr = 
-    let tr_simp = (*elim_skolem_light*) tr in
+    let tr_simp = tr in
     let transform = tr_simp.transform in
     let transform_list = ref [] in
     ST.iter (fun v term -> 

@@ -36,3 +36,7 @@ val neg_pre : t -> t
 val rec_sol_to_tr : Sigs.Recurrence.lin_recs_sol -> string list -> t
 (**Get the program vars in a transition.*)
 val get_vars : t -> string list
+(**"Simplifies" the transition formula by projecting out skolem variables and using Z3's quantifier elimination tactic.*)
+val simplify : t -> t
+(**"Simplifies" the transition formula by projecting out skolem variables and using Z3's quantifier elimination light tactic.*)
+val simplify_light : t -> t
