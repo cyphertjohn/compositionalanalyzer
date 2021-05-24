@@ -25,25 +25,23 @@ module Make (A : Sigs.Domain) = struct
   *)
 
   let alpha_from_below (ctx : Z3.context) (psi : Z3.Expr.expr) : A.t = 
+    let mk_not = Z3.Boolean.mk_not ctx in
     let solver = Z3.Solver.mk_simple_solver ctx in
     let ans = ref bot in
     Z3.Solver.add solver [psi]; (*<--- Note the syntax for adding to the Z3 solver*)
     Logger.log_line ~level:`trace ("Init phi:");
     Logger.log_line ~level:`trace (Z3.Expr.to_string psi);
-    while (is_sat solver) do
-      (* Modify the loop condition and fill in the body. You will need some functions from A given in the above comment
+    while (false) do
+      (* TODO: Modify the loop condition and replace the body with your code. You will need some functions from A given in the above comment
          and the functions get_model and is_sat from above. You will also need to add more things to the Z3 solver.
-         See above.*)
-      let model = get_model solver in
-      let singlet = sing model in
-      ans := join !ans singlet;
-      Logger.log_line ~level:`trace ("Curr elem:");
-      Logger.log_line ~level:`trace (A.to_string !ans);
-      Z3.Solver.add solver [Z3.Boolean.mk_not ctx (gamma_hat ctx !ans)]
+         See above. The loop body should follow fig 1 from http://www.cs.cornell.edu/courses/cs711/2005fa/papers/rsy-vmcai04.pdf 
+         pretty closely. Use mk_not form for negation. Feel free to add logging information.*)
+      ()
     done;
     !ans
 end
 
+(*This functor takes in two abstract domains and creates a product domain *)
 module Prod (A:Sigs.Domain) (B:Sigs.Domain) = struct
 
   include Make(struct
@@ -66,10 +64,29 @@ module Prod (A:Sigs.Domain) (B:Sigs.Domain) = struct
 
   end)
 
+  (* You have these functions at your disposal:
+    val A.bot : A.t
+    val A.sing : Z3.Model.model -> A.t
+    val A.join : A.t -> A.t -> A.t
+    val A.gamma_hat : Z3.context -> A.t -> Z3.Expr.expr
+    val A.to_string : A.t -> string
+    val B.bot : B.t
+    val B.sing : Z3.Model.model -> B.t
+    val B.join : B.t -> B.t -> B.t
+    val B.gamma_hat : Z3.context -> B.t -> Z3.Expr.expr
+    val B.to_string : B.t -> string
+    val bot : A.t * B.t
+    val sing : Z3.Model.model -> A.t * B.t
+    val join : A.t * B.t -> A.t * B.t -> A.t * B.t
+    val gamma_hat : Z3.context -> A.t * B.t -> Z3.Expr.expr
+    val to_string : A.t * B.t -> string
+    val alpha_from_below : Z3.context -> Z3.Expr.expr -> A.t * B.t
+    *)
+
   let reduce a b = 
     let ctx = Z3.mk_context [] in
-    let a_form = A.gamma_hat ctx a in
-    let b_form = B.gamma_hat ctx b in
-    let conj = Z3.Boolean.mk_and ctx [a_form; b_form] in
-    alpha_from_below ctx conj
+    let mk_and x y = Z3.Boolean.mk_and ctx [x;y] in
+    (*TODO: Replace the following line with your code. Hint: You might need the above function, and
+      the solution should only take 3-5 lines.*)
+    (a, b)
 end

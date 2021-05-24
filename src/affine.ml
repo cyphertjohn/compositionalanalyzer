@@ -288,30 +288,3 @@ module Make (A : Sigs.Rational) = struct
       Z3.Boolean.mk_and ctx (Array.to_list (Array.mapi make_exp_from_row z3a))
 
 end 
-
-module Q = struct
-  type q = Mpqf.t
-  type z = Mpzf.t
-  let add = Mpqf.add
-  let mul = Mpqf.mul
-  let div = Mpqf.div
-  let neg = Mpqf.neg
-  let is_zero c = (Mpqf.cmp_int c 0) = 0
-  let is_one c = (Mpqf.cmp_int c 1) = 0
-  let to_string = Mpqf.to_string
-  let from_string s =
-    let s = 
-      if (s.[0]='(') then
-        let trimmed = String.sub s 1 ((String.length s) - 2) in
-        String.concat "" (String.split_on_char ' ' trimmed)
-      else s
-    in
-    Mpqf.of_string s
-  let cmp = Mpqf.cmp
-  let get_den = Mpqf.get_den
-  let z_to_q = Mpqf.of_mpz
-  let z_of_string = Mpzf.of_string
-  let lcm = Mpzf.lcm
-end
-
-module AffineGmp = Make(Q)
