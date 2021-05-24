@@ -23,11 +23,12 @@
         %}        
         %token <int> INT
         %token <string> IDENT
-        %token PLUS MINUS TIMES ASSIGN
+        %token PLUS MINUS TIMES ASSIGN MOD
         %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT ASSERTION ASSUME NONDET
         %token LE LESS GREATER GE EQUAL
         %token LPAREN RPAREN SC
         %token EOF
+        %right MOD
         %left PLUS MINUS OR     /* lowest precedence */
         %left TIMES AND         /* medium precedence */
         %nonassoc UMINUS UNOT   /* highest precedence */
@@ -86,6 +87,9 @@
           | IDENT                       { (add_var $1); Sigs.Expr.Times (1, $1) }
           | INT                         { Sigs.Expr.Int($1) }
         ;
+        arith_expr:
+            linexp                      { Sigs.Expr.Sum(add_Add $1) }
+          | linexp MOD linexp           { Sigs.Expr.Mod(add_Add $1, add_Add $3) }
         boolexp:
             LPAREN boolexp RPAREN       { $2 }
           | boolexp AND boolexp         { Sigs.Expr.And($1, $3) }
@@ -96,9 +100,9 @@
           | pred                        { Sigs.Expr.Pred $1 }
         ;
         pred:
-          | linexp LE linexp            { Sigs.Expr.LessEq(add_Add $1, add_Add $3) }
-          | linexp LESS linexp          { Sigs.Expr.Less(add_Add $1, add_Add $3) }
-          | linexp GE linexp            { Sigs.Expr.GreaterEq(add_Add $1, add_Add $3) }
-          | linexp GREATER linexp       { Sigs.Expr.Greater(add_Add $1, add_Add $3) }
-          | linexp EQUAL linexp         { Sigs.Expr.Eq (Sigs.Expr.Equal(add_Add $1, add_Add $3)) }
+          | arith_expr LE arith_expr            { Sigs.Expr.LessEq($1, $3) }
+          | arith_expr LESS arith_expr          { Sigs.Expr.Less($1, $3) }
+          | arith_expr GE arith_expr            { Sigs.Expr.GreaterEq($1, $3) }
+          | arith_expr GREATER arith_expr       { Sigs.Expr.Greater($1, $3) }
+          | arith_expr EQUAL arith_expr         { Sigs.Expr.Eq ($1, $3) }
         ;

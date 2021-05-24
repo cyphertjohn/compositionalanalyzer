@@ -14,7 +14,8 @@
                         "false", FALSE;
                         "assume", ASSUME;
                         "assert", ASSERTION;
-                        "nondet", NONDET
+                        "nondet", NONDET;
+                        "mod", MOD
                         ]
 }
 rule token = parse

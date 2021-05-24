@@ -247,15 +247,18 @@ open PathExp
     else if List.length l = 1 then interp_term (List.hd l)
     else Z3.Arithmetic.mk_add ctx (List.map interp_term l)
 
-  let interp_e (Equal (lhs, rhs)) = Z3.Boolean.mk_eq ctx (interp_exp lhs) (interp_exp rhs)
+  let interp_aexp x = 
+    match x with
+    | Sum xp -> interp_exp xp
+    | Mod (y, z) -> Z3.Arithmetic.Integer.mk_mod ctx (interp_exp y) (interp_exp z)
 
   let interp_p p = 
     match p with
-    | LessEq(x, y) -> Z3.Arithmetic.mk_le ctx (interp_exp x) (interp_exp y)
-    | Less (x, y) -> Z3.Arithmetic.mk_lt ctx (interp_exp x) (interp_exp y)
-    | GreaterEq (x, y) -> Z3.Arithmetic.mk_ge ctx (interp_exp x) (interp_exp y)
-    | Greater (x, y) -> Z3.Arithmetic.mk_gt ctx (interp_exp x) (interp_exp y)
-    | Eq e -> interp_e e
+    | LessEq(x, y) -> Z3.Arithmetic.mk_le ctx (interp_aexp x) (interp_aexp y)
+    | Less (x, y) -> Z3.Arithmetic.mk_lt ctx (interp_aexp x) (interp_aexp y)
+    | GreaterEq (x, y) -> Z3.Arithmetic.mk_ge ctx (interp_aexp x) (interp_aexp y)
+    | Greater (x, y) -> Z3.Arithmetic.mk_gt ctx (interp_aexp x) (interp_aexp y)
+    | Eq (x, y) -> Z3.Boolean.mk_eq ctx (interp_aexp x) (interp_aexp y)
 
   let rec interp_c c = 
     match c with 

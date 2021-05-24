@@ -26,12 +26,14 @@ module Expr = struct
 
     type lineq = Equal of linexp * linexp
     
+    type arith_expr = Sum of linexp | Mod of linexp * linexp
+    
     type pred = 
-      | LessEq of linexp * linexp
-      | Less of linexp * linexp
-      | GreaterEq of linexp * linexp
-      | Greater of linexp * linexp
-      | Eq of lineq
+      | LessEq of arith_expr * arith_expr
+      | Less of arith_expr * arith_expr
+      | GreaterEq of arith_expr * arith_expr
+      | Greater of arith_expr * arith_expr
+      | Eq of arith_expr * arith_expr
 
     type boolexp =
       True
