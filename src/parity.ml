@@ -119,7 +119,8 @@ let join (x : t) (y : t) =
 
     (*TODO: Currently this says that if we have v had some parity p1 in x and some parity p2 in y, we always return unknown.
       This is sound, but we throw away too much information. Can you fix this function? Hint: what should the parity of v be
-      if p1 is the same as p2? What if they're different? Should only take 1 or 2 lines to fix.*)
+      if p1 is the same as p2? What if they're different? Should only take 1 or 2 lines to fix. Also the resulting parity needs to be
+      wrapped with a "Some". *)
     let join_var (v : string) (p1 : parity) (p2 : parity) : parity option = 
       (*Replace this function body with your code*)
       Some Unknown 
