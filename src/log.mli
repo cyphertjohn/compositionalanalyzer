@@ -7,7 +7,8 @@ val set_chan : out_channel -> unit
 val set_level : string -> unit
 
 (**Log a string according to a verbosity level. Default verbosity is always. 
-For example to log string s at level debug one uses [log ~level:`debug s].*)
+For example to log string s at level debug one uses [log ~level:`debug s].
+If the level label is not given, the logging level is [`always].*)
 val log : ?level:[< `always | `debug | `trace > `always ] -> string -> unit
 
 (**Same as {!val:log} but prints a new line character at the end.*)
