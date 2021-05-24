@@ -43,14 +43,14 @@ to sync opam with your current shell.
 ## Lab 1
 The goal of this lab is to illustrate how logic makes a good intermediate representation for abstract interpretation, and how we can use advances in SMT, present in this project using Z3, to do a lot of the heavy lifting of implementing program analysis. The exercises will have you examine the ["alpha from below"](http://www.cs.cornell.edu/courses/cs711/2005fa/papers/rsy-vmcai04.pdf) (figure 1) algorithm which extracts the best abstract value from a logical formula. You will then examine how using logic as an intermediate representation allows one to implement a "reduced product" quite easily.
 
-When this lab is compiled with `make`, an executable `analyzer.native` will be produced. `analyzer.native` takes one or two "form" files as input. A "form" file is a custom file that contains a linear integer arithmetic (LIA) formula. See `parity.form` and `eq.form` for examples of the syntax of these formulas. `par.mly` gives the detailed grammar.
+When this lab is compiled with `make`, an executable `analyzer.native` will be produced. `analyzer.native` takes one or two "form" files as input. A "form" file is a custom file that contains a linear integer arithmetic (LIA) formula. See the examples directory for examples of the syntax of these formulas. `par.mly` gives the detailed grammar.
 
 Also in this project are two abstract domains. A parity domain and a domain of affine equalities. The affine equality domain is complete, but the parity domain has some functionality missing, which you will provide in the first exercise. When provided with a single "form" file `analyzer.native` will parse the file and convert it to a Z3 expr, essentially a LIA formula. `analyzer.native` will attempted to abstract this formula in the parity domain and print the result; however, this functionality is not implemented yet. If `analyzer.native` is provided with two "form" files, it will attempt to abstract the first to the parity domain and the second to the domain of affine equalities and print both results.
 
 ### Exercise 1
 As a warm-up for the first exercise we will examine the parity domain and implement the join. Navigate to `parity.ml`, and look at the functions there. Read the comments to get a sense of how a domain is implemented. The join function at the bottom of the file has a TODO comment, asking you to write a few lines of code.
 
-One thing to consider is relatively how few functions are required to implement the domain. We really only need a join and meet and a way to convert to and from logic. If we didn't take this logical approach we would have to implement abstract transfer functions for all the expressions in our language! That is, we would have to determine how our abstract values change with all the various arithmetic operations (i.e. Even + Even = Even, Even + Odd = Odd, etc.)
+One thing to consider is how few functions are required to implement the domain. We really only need a join and meet and a way to convert to and from logic. If we didn't take this logical approach we would have to implement abstract transfer functions for all the expressions in our language! That is, we would have to determine how our abstract values change with all the various arithmetic operations (i.e. Even + Even = Even, Even + Odd = Odd, etc.)
 
 ### Exercise 2
 Once the parity join is complete, `parity.ml` gives functions to manipulate domain elements, and a way to convert a parity element to logic. What remains is a way to go from logic to the parity domain. This is our next goal. Navigate to abstract.ml. There you will find an incomplete implementation of alpha_from_below. The next exercise is to fill in that function.
@@ -59,7 +59,7 @@ Once completed, you will have a way to extract a parity element from a formula. 
 ```
 ./analyzer.native examples/parity1.form
 ```
-You should get something like z->Even, y->Even, and x->Even. Try to make your own examples.
+You should get something like z->Even, y->Even, and x->Even. Try some of the other examples and try to make your own.
 
 ### Exercise 3
 The next goal is to combine the parity domain with another domain to explore product domains. The domain we will combine with is the domain of affine equalities. An element of the domain of affine equalities is a constraint system of the form *Ax = b*, where *A* is a m by n matrix, *x* is a vector of n variables, and *b* is a vector of m constrants.
