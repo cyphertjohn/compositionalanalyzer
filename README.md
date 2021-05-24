@@ -34,6 +34,12 @@ git pull
 ```
 before checking out a lab.
 
+It also wouldn't hurt to run
+```
+eval $(opam env)
+```
+to sync opam with your current shell.
+
 ## Lab 1
 The goal of this lab is to illustrate how logic makes a good intermediate representation for abstract interpretation, and how we can use advances in SMT, present in this project using Z3, to do a lot of the heavy lifting of implementing program analysis. The exercises will have you examine the ["alpha from below"](http://www.cs.cornell.edu/courses/cs711/2005fa/papers/rsy-vmcai04.pdf) (figure 1) algorithm which extracts the best abstract value from a logical formula. You will then examine how using logic as an intermediate representation allows one to implement a "reduced product" quite easily.
 
