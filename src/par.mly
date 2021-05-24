@@ -23,57 +23,21 @@
         %}        
         %token <int> INT
         %token <string> IDENT
-        %token PLUS MINUS TIMES ASSIGN MOD
-        %token IF THEN ENDIF ELSE DO WHILE DONE TRUE FALSE AND OR NOT ASSERTION ASSUME NONDET
+        %token PLUS MINUS TIMES MOD
+        %token TRUE FALSE AND OR NOT
         %token LE LESS GREATER GE EQUAL
-        %token LPAREN RPAREN SC
-        %token EOF
+        %token LPAREN RPAREN
+        %token EOF EOL
         %right MOD
         %left PLUS MINUS OR     /* lowest precedence */
         %left TIMES AND         /* medium precedence */
         %nonassoc UMINUS UNOT   /* highest precedence */
         %start main             /* the entry point */
-        %type <(Sigs.PathExp.statement Sigs.PathExp.pathexp * Sigs.Expr.boolexp option) * string list> main
+        %type <Sigs.Expr.boolexp  * string list> main
         %%
         main:
-            program EOF                 { $1, to_list !vars }
-        ;
-        program:
-            assume statement            { Sigs.PathExp.Mul($1, $2), None }
-          | statement                   { $1, None }
-          | statement assertion         { $1, Some $2 }
-          | assume statement assertion     { Sigs.PathExp.Mul($1, $2), Some $3 }
-        ;
-        assume:
-            ASSUME LPAREN boolexp RPAREN    { Sigs.PathExp.Letter(Sigs.PathExp.Cond($3)) }
-        ;
-        assertion:
-            ASSERTION LPAREN boolexp RPAREN    { $3 }
-        ;
-        statement:
-            statement loop statement        { Sigs.PathExp.Mul($1, Sigs.PathExp.Mul($2, $3)) }
-          | statement loop                  { Sigs.PathExp.Mul($1, $2) }
-          | loop statement                  { Sigs.PathExp.Mul($1, $2) }
-          | loop                            { $1 }
-          | statement branch statement      { Sigs.PathExp.Mul($1, Sigs.PathExp.Mul($2, $3)) }
-          | statement branch                { Sigs.PathExp.Mul($1, $2) }
-          | branch statement                { Sigs.PathExp.Mul($1, $2) }
-          | branch                          { $1 }
-          | statement statement          { Sigs.PathExp.Mul($1, $2) }
-          | linassign                       { $1 }
-        ;
-        loop:
-            WHILE LPAREN boolexp RPAREN DO statement DONE   { Sigs.PathExp.Mul(Sigs.PathExp.Star(Sigs.PathExp.Mul(Sigs.PathExp.Letter(Sigs.PathExp.Cond($3)), $6)), Sigs.PathExp.Letter(Sigs.PathExp.Cond(Sigs.Expr.Not($3)))) }
-          | WHILE LPAREN NONDET RPAREN DO statement DONE   { Sigs.PathExp.Star($6) }
-        ;
-        branch:
-            IF LPAREN boolexp RPAREN THEN statement ENDIF                 { Sigs.PathExp.Plus(Sigs.PathExp.Mul(Sigs.PathExp.Letter(Sigs.PathExp.Cond($3)), $6), Sigs.PathExp.Letter(Sigs.PathExp.Cond(Sigs.Expr.Not($3)))) }
-          | IF LPAREN boolexp RPAREN THEN statement ELSE statement ENDIF  { Sigs.PathExp.Plus(Sigs.PathExp.Mul(Sigs.PathExp.Letter(Sigs.PathExp.Cond($3)), $6), Sigs.PathExp.Mul(Sigs.PathExp.Letter(Sigs.PathExp.Cond(Sigs.Expr.Not($3))), $8)) }
-          | IF LPAREN NONDET RPAREN THEN statement ENDIF                 { Sigs.PathExp.Plus($6, Sigs.PathExp.One) }
-          | IF LPAREN NONDET RPAREN THEN statement ELSE statement ENDIF  { Sigs.PathExp.Plus($6, $8) }
-        ;
-        linassign:
-            IDENT ASSIGN linexp SC           { (add_var $1); Sigs.PathExp.Letter(Sigs.PathExp.Assign($1, add_Add $3)) }
+            boolexp EOF                 { $1, to_list !vars }
+          | boolexp EOL                 { $1, to_list !vars }
         ;
         linexp:
             linterm PLUS linexp              { $1 :: $3 }

@@ -40,4 +40,6 @@ module Prod :
       val to_string : t -> string
       (**Produces the best element from [A] cross [B]. Requires the context associated with the input formula.*)
       val alpha_from_below : Z3.context -> Z3.Expr.expr -> t
+      (**Computes the reduced product of the two inputs.*)
+      val reduce : A.t -> B.t -> t
     end

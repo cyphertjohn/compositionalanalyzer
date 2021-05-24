@@ -27,7 +27,7 @@ end
 
 module Logger = Log
 
-module Tr = Transition
+module F = Formula
 
 module AffineEqs = Abstract.Make(Affine.Make(Q))
 
@@ -37,48 +37,54 @@ module ParityTimesAffine = Abstract.Prod(Parity)(Affine.Make(Q))
 
 let log_out_file = ref false
 
-let analyze_file in_file_name =
-  let ic = open_in in_file_name in 
-  let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel ic) in
-  Tr.set_prog_vars vars;
-  let summary = Tr.simplify_light (Tr.analyze_path_exp body vars) in
-  (match assertion with
-    | None -> ()
-    | Some a -> 
-      if Tr.check_assert summary a then
-        Logger.log_line "Assertion PASSED"
-      else
-        Logger.log_line "Assertion FAILED\n");
-  let summary_form, ctx = Tr.to_formula summary in
-  let parity_str = Parity.to_string (Parity.alpha_from_below ctx summary_form) in
-  let aff_eq_str = AffineEqs.to_string (AffineEqs.alpha_from_below ctx summary_form) in
-  let prod_str = ParityTimesAffine.to_string (ParityTimesAffine.alpha_from_below ctx summary_form) in
-  Logger.log_line "Parity abstraction:";
-  Logger.log_line (parity_str ^ "\n");
-
-  Logger.log_line "Affine abstraction:";
-  Logger.log_line (aff_eq_str ^ "\n");
-  
-  Logger.log_line "Reduced Product abstraction:";
-  Logger.log_line (prod_str ^ "\n");
-
+let get_form input_file = 
+  let ic = open_in input_file in 
+  let (boolexp, vars) = Par.main Lex.token (Lexing.from_channel ic) in
+  let (form, ctx) = Formula.bool_exp_to_formula boolexp in
   close_in ic;
+  form, ctx
+
+let setOut fileName = 
+  log_out_file := true;
+  Logger.set_chan (open_out fileName)
+       
+let input_files = ref []
+  
+let compute_reduce_product = ref false
+  
+let anon_fun file = input_files := file :: !input_files
+
+let abstract_files _ =
+  let parity_form, ctx = get_form (List.nth !input_files 0) in
+  let parity_val = Parity.alpha_from_below ctx parity_form in
+  Logger.log_line "Parity abstraction:";
+  Logger.log_line ((Parity.to_string parity_val) ^ "\n");
+  if (List.length !input_files > 1) then 
+    let (eq_form, eq_ctx) = get_form (List.nth !input_files 1) in
+    let aff_val = AffineEqs.alpha_from_below ctx eq_form in
+    Logger.log_line "Affine abstraction:";
+    Logger.log_line ((AffineEqs.to_string aff_val) ^ "\n");
+    if !compute_reduce_product then
+      let prod = ParityTimesAffine.reduce parity_val aff_val in
+      Logger.log_line "Reduced Product abstraction:";
+      Logger.log_line (ParityTimesAffine.to_string prod ^ "\n")
+    else () 
+  else ();
   if (!log_out_file) then Logger.close ()
   else ()
 
 
 
-let setOut fileName = 
-  log_out_file := true;
-  Logger.set_chan (open_out fileName);;
-     
- 
 let register () = 
   let speclist = [("-o", Arg.String setOut, "Set an output file"); 
                   ("-v", Arg.String Logger.set_level, "Set versbosity [trace | debug | always]");
+                  ("-prod", Arg.Set compute_reduce_product, "If given an eq formula compute a reduced product");
                   ("-time", Arg.Set Logger.log_times, "Log execution times")] in
-  let usage = "analyzer.native <while-file>" in
-  Arg.parse speclist analyze_file usage
+  let usage = "analyzer.native <parity-form> [<eq-form>]" in
+  Arg.parse speclist anon_fun usage
 
 let () =
-  register ();;
+  register ();
+  input_files := List.rev !input_files;
+  abstract_files ()
+;;
