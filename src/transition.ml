@@ -359,37 +359,21 @@ open PathExp
     let guard_str = Z3.Expr.to_string (Z3.Expr.simplify tr_simp.guard None) in
     transform_str ^ "\nwhen " ^ guard_str
 
-  (*Convert a recurrence solution to a transition.*)
-  let rec_sol_to_tr rec_sol loop_vars = 
-    match rec_sol with
-    | EmptySol -> 
-      (*If the solution is empty, we know nothing and must havoc all the loop_vars.*)
-      let transform = ref ST.empty in
-      List.iter (fun v -> transform := ST.add v (make_havoc ()) !transform) loop_vars;
-      let guard = Z3.Boolean.mk_true ctx in
-      {transform = !transform; guard}
-    | InfeasibleSol ->
-      {transform = ST.empty; guard = Z3.Boolean.mk_false ctx}
-    | RecsSol sols ->
-      let loop_counter = make_loop_counter () in
-      let summarized_vars = ref [] in
-      let folder acc (RecSol (Term (Add rec_terms), Times(inc, K))) = 
-        let process_var_term (trans, lhs_terms, rhs_terms) (Times (coef, var)) = 
-          summarized_vars := var :: !summarized_vars;
-          let fresh = make_fresh var in
-          let lhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; fresh] in
-          let rhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; Z3.Arithmetic.Integer.mk_const_s ctx var] in
-          (ST.add var fresh trans, lhs_term :: lhs_terms, rhs_term :: rhs_terms)
-        in
-        let (transf, lhs_terms, rhs_terms) = List.fold_left process_var_term (fst acc, [], []) rec_terms in
-        let increase = Z3.Arithmetic.mk_mul ctx [loop_counter; Z3.Arithmetic.Integer.mk_numeral_i ctx inc] in
-        let lhs = Z3.Arithmetic.mk_add ctx lhs_terms in
-        let rhs = Z3.Arithmetic.mk_add ctx (increase :: rhs_terms) in
-        (transf, (Z3.Boolean.mk_eq ctx lhs rhs) :: snd acc)
-      in
-      let (transform, guards) = List.fold_left folder (ST.empty, []) sols in
-      let loop_counter_ge_1 = Z3.Arithmetic.mk_ge ctx loop_counter (Z3.Arithmetic.Integer.mk_numeral_i ctx 1) in
-      let unsummarized_vars = List.filter (fun v -> not (List.mem v !summarized_vars)) loop_vars in
-      (*We must havoc any variable that was not summarized in the solution.*)
-      let transform_havoc = List.fold_left (fun acc havoc_var -> ST.add havoc_var (make_havoc ()) acc) transform unsummarized_vars in
-      {transform = transform_havoc; guard = Z3.Boolean.mk_and ctx (loop_counter_ge_1 :: guards)}
+  let rec eval p = (*Could be memoized*)
+    match p with
+    | Letter a -> interp a
+    | One -> one
+    | Zero -> zero
+    | Plus (a, b) -> plus (eval a) (eval b)
+    | Mul (a, b) -> mul (eval a) (eval b)
+    | Star a -> eval a (* This module is only meant for loop free code! Will return an unsound answer. *)
+  
+  let analyze_path_exp path_exp vars = 
+    set_prog_vars vars;
+    let summary = eval path_exp in
+    summary
+      
+  
+  let analyze_path_exp_assertion path_exp assertion vars = 
+    let summary = analyze_path_exp path_exp vars in
+    (summary, check_assert summary assertion)

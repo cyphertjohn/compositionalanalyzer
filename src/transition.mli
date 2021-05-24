@@ -40,3 +40,7 @@ val get_vars : transition -> string list
 val simplify : transition -> transition
 (**"Simplifies" the transition formula by projecting out skolem variables and using Z3's quantifier elimination light tactic.*)
 val simplify_light : transition -> transition
+(**Return a program summary of the give path expression. This is only meant for loop free code.*)
+val analyze_path_exp : Sigs.PathExp.statement Sigs.PathExp.pathexp -> string list -> transition
+(**Return a program summary and a boolean indicating whether the given boolean expression holds at the end of the program. Only meant for loop free code.*)
+val analyze_path_exp_assertion : Sigs.PathExp.statement Sigs.PathExp.pathexp -> Sigs.Expr.boolexp -> string list -> transition * bool
