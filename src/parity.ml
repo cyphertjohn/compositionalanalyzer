@@ -117,7 +117,7 @@ let join (x : t) (y : t) =
   | (_, Bot) -> x
   | (I pmap1, I pmap2) ->  (*If x and y map some vars to parities, we must merge the maps.*)
 
-    (*TODO: Currently this says that if we have v had some parity p1 in x and some parity p2 in y, we always return unknown.
+    (*TODO: Currently this says that if we have that v had some parity p1 in x and some parity p2 in y, we always return unknown.
       This is sound, but we throw away too much information. Can you fix this function? Hint: what should the parity of v be
       if p1 is the same as p2? What if they're different? Should only take 1 or 2 lines to fix. Also the resulting parity needs to be
       wrapped with a "Some". *)
