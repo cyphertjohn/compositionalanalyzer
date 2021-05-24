@@ -59,7 +59,7 @@ Once completed, you will have a way to extract a parity element from a formula. 
 ```
 ./analyzer.native examples/parity1.form
 ```
-You should get something like z->Even, y->Even, and x->Even. Try some of the other examples and try to make your own.
+You should get something like z->Odd, y->Even, and x->Even. Try some of the other examples and try to make your own.
 
 ### Exercise 3
 The next goal is to combine the parity domain with another domain to explore product domains. The domain we will combine with is the domain of affine equalities. An element of the domain of affine equalities is a constraint system of the form *Ax = b*, where *A* is a m by n matrix, *x* is a vector of n variables, and *b* is a vector of m constrants.
