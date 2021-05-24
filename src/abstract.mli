@@ -23,9 +23,23 @@ module Make :
     end
 
 (**A functor that produces a reduced product given two domains.*)
-module ReduceProd :
-  functor (A : Sigs.Domain) (B : Sigs.Domain) ->
+module Prod :
+  functor (A : Sigs.Domain) (B : Sigs.Domain) -> 
     sig
-      (**[reduce a b] computes the reduced product of [a] and [b].*)
-      val reduce : A.t -> B.t -> A.t * B.t
-  end
+      (**The type of the domain element*)
+      type t = A.t * B.t
+      (**The bottom element*)
+      val bot : t
+      (**A function that extracts a domain element from a model.*)
+      val sing : Z3.Model.model -> t
+      (**The join of two elements*)
+      val join : t -> t -> t
+      (**Converts a domain element to a formula*)
+      val gamma_hat : Z3.context -> t -> Z3.Expr.expr
+      (**Converts a domain element to a string*)
+      val to_string : t -> string
+      (**Produces the best element from [A] cross [B]. Requires the context associated with the input formula.*)
+      val alpha_from_below : Z3.context -> Z3.Expr.expr -> t
+      (**Computes the reduced product of the two inputs.*)
+      val reduce : A.t -> B.t -> t
+    end
