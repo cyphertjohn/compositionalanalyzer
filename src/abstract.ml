@@ -2,7 +2,7 @@ module Logger = Log
 
 module Make (A : Sigs.Domain) = struct
   
-  open A
+  include A
 
   let is_sat (solver : Z3.Solver.solver) : bool = 
     match (Z3.Solver.check solver []) with
