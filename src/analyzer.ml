@@ -29,8 +29,11 @@ module Logger = Log
 
 module Tr = Transition
 
-module A = Affine.Make(Q)
-module ARA = Abstract.Make(A)
+module AffineEqs = Abstract.Make(Affine.Make(Q))
+
+module Parity = Abstract.Make(Parity)
+
+module ParityTimesAffine = Abstract.Prod(Parity)(Affine.Make(Q))
 
 let log_out_file = ref false
 
@@ -39,9 +42,6 @@ let analyze_file in_file_name =
   let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel ic) in
   Tr.set_prog_vars vars;
   let summary = Tr.simplify_light (Tr.analyze_path_exp body vars) in
-  Logger.log_line "Program summary:";
-  Logger.log_line (Tr.to_string summary);
-  Logger.log_line "";
   (match assertion with
     | None -> ()
     | Some a -> 
@@ -49,6 +49,19 @@ let analyze_file in_file_name =
         Logger.log_line "Assertion PASSED"
       else
         Logger.log_line "Assertion FAILED\n");
+  let summary_form, ctx = Tr.to_formula summary in
+  let parity_str = Parity.to_string (Parity.alpha_from_below ctx summary_form) in
+  let aff_eq_str = AffineEqs.to_string (AffineEqs.alpha_from_below ctx summary_form) in
+  let prod_str = ParityTimesAffine.to_string (ParityTimesAffine.alpha_from_below ctx summary_form) in
+  Logger.log_line "Parity abstraction:";
+  Logger.log_line (parity_str ^ "\n");
+
+  Logger.log_line "Affine abstraction:";
+  Logger.log_line (aff_eq_str ^ "\n");
+  
+  Logger.log_line "Reduced Product abstraction:";
+  Logger.log_line (prod_str ^ "\n");
+
   close_in ic;
   if (!log_out_file) then Logger.close ()
   else ()

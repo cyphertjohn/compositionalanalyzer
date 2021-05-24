@@ -32,8 +32,6 @@ val get_pre : transition -> transition
 val get_post : transition -> transition
 (**The negation of the pre-state.*)
 val neg_pre : transition -> transition
-(**Convert a recurrence solution to a transition formula.*)
-val rec_sol_to_tr : Sigs.Recurrence.lin_recs_sol -> string list -> transition
 (**Get the program vars in a transition.*)
 val get_vars : transition -> string list
 (**"Simplifies" the transition formula by projecting out skolem variables and using Z3's quantifier elimination tactic.*)

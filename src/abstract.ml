@@ -44,9 +44,7 @@ module Make (A : Sigs.Domain) = struct
     !ans
 end
 
-module ReduceProd (A:Sigs.Domain) (B:Sigs.Domain) = struct
-  module AAbs = Make(A)
-  module BAbs = Make(B)
+module Prod (A:Sigs.Domain) (B:Sigs.Domain) = Make(struct
 
   type t = A.t * B.t
 
@@ -64,11 +62,4 @@ module ReduceProd (A:Sigs.Domain) (B:Sigs.Domain) = struct
     let b_str = B.to_string (snd x) in
     "Left Domain element:\n" ^ a_str ^ "\n\n" ^ "Right Domain element:\n" ^ b_str ^ "\n\n"
 
-(*  let reduce (a : A.t) (b : B.t) : (A.t * B.t) =
-    let ctx = Z3.mk_context [] in
-    let gamma_a = A.gamma_hat ctx a in
-    let gamma_b = B.gamma_hat ctx b in
-    let conj = Z3.Boolean.mk_and ctx [gamma_a; gamma_b] in
-    (AAbs.alpha_from_below ctx conj, BAbs.alpha_from_below ctx conj)*)
-
-end
+end)
