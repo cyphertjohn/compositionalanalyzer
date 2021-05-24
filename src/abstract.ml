@@ -14,7 +14,7 @@ module Make (A : Sigs.Domain) = struct
     | Some model -> model
     | None -> failwith "No model or unchecked solver"
 
-  let alpha_from_below ctx psi = 
+  let alpha_from_below (ctx : Z3.context) (psi : Z3.Expr.expr) : A.t = 
     let solver = Z3.Solver.mk_simple_solver ctx in
     let ans = ref bot in
     Z3.Solver.add solver [psi];
@@ -35,7 +35,7 @@ module ReduceProd (A:Sigs.Domain) (B:Sigs.Domain) = struct
   module AAbs = Make(A)
   module BAbs = Make(B)
 
-  let reduce a b =
+  let reduce (a : A.t) (b : B.t) : (A.t * B.t) =
     let ctx = Z3.mk_context [] in
     let gamma_a = A.gamma_hat ctx a in
     let gamma_b = B.gamma_hat ctx b in

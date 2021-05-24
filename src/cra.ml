@@ -1,5 +1,3 @@
-open Sigs
-
 module Logger = Log
 
 module Q = struct
@@ -29,6 +27,10 @@ end
 
 
 module Make () = struct
+  
+  open Sigs.Recurrence
+  open Sigs.PathExp
+  open Sigs.Expr
 
   include Transition
 
@@ -42,18 +44,18 @@ module Make () = struct
     let delta_map = ref S.empty in
     let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) loop_vars in
     let mk_delta_eq delta =
-      let lhs = Sigs.Expr.Add [Sigs.Expr.Times (1, get_prime (S.find delta !delta_map)); Sigs.Expr.Times (-1, S.find delta !delta_map)] in
-      let rhs = Sigs.Expr.Add [Sigs.Expr.Times (1,  delta)] in
-      Sigs.Expr.Equal (lhs, rhs)
+      let lhs = Add [Times (1, get_prime (S.find delta !delta_map)); Times (-1, S.find delta !delta_map)] in
+      let rhs = Add [Times (1,  delta)] in
+      Equal (lhs, rhs)
     in
     let delts_eq = List.map mk_delta_eq delta_vars in
     let extra_eqs = A.add_eqs aff_eq delts_eq in
     let delta_only = A.project extra_eqs delta_vars in
     match delta_only with
     | A.Top -> 
-      Sigs.Recurrence.Empty
+      Empty
     | A.Bot ->
-      Sigs.Recurrence.Infeasible
+      Infeasible
     | A.I(m, b, vars) -> 
       let extract_rec i row =
         let folder dvar coef acc =
@@ -61,24 +63,24 @@ module Make () = struct
           else
             let var = S.find dvar !delta_map in
             let coef_i = int_of_string (Q.to_string coef) in
-            Sigs.Expr.Times (coef_i, var) :: acc
+            Times (coef_i, var) :: acc
         in
-        Sigs.Recurrence.Rec (Sigs.Recurrence.Term (Sigs.Expr.Add (S.fold folder row [])), Sigs.Recurrence.Inc (int_of_string (Q.to_string b.(i))))
+        Rec (Term (Add (S.fold folder row [])), Inc (int_of_string (Q.to_string b.(i))))
       in
-      Sigs.Recurrence.Recs (Array.to_list (Array.mapi extract_rec m))
+      Recs (Array.to_list (Array.mapi extract_rec m))
 
 
   (*Rec (Term(x+y), Inc 5) -> (x+y)' = x+y + 5 -> (x+y)' = (x+y) + 5 * k*)    
-  let solve_rec (Sigs.Recurrence.Rec (Sigs.Recurrence.Term rec_term, Sigs.Recurrence.Inc inc)) =
-    Sigs.Recurrence.RecSol (Sigs.Recurrence.Term rec_term, Sigs.Recurrence.Times (inc, Sigs.Recurrence.K)) 
+  let solve_rec (Rec (Term rec_term, Inc inc)) =
+    RecSol (Term rec_term, Times (inc, K)) 
 
 
 
   let solve_recs recurs = 
     match recurs with
-    | Sigs.Recurrence.Empty -> Sigs.Recurrence.EmptySol
-    | Sigs.Recurrence.Infeasible -> Sigs.Recurrence.InfeasibleSol
-    | Sigs.Recurrence.Recs recurrences -> Sigs.Recurrence.RecsSol (List.map solve_rec recurrences)
+    | Empty -> EmptySol
+    | Infeasible -> InfeasibleSol
+    | Recs recurrences -> RecsSol (List.map solve_rec recurrences)
 
   let star tr = 
     let loop_vars = get_vars tr in
@@ -89,11 +91,10 @@ module Make () = struct
     Logger.log_line ~level:`debug (to_string pre);
     Logger.log_line ~level:`debug ("\nPost:");
     Logger.log_line ~level:`debug (to_string post);
-    (*let not_pre = neg_pre tr in*)
     let aff_eq = ARA.alpha_from_below ctx form in
     let recs = extract_recs aff_eq loop_vars in
     Logger.log_line ("Loop Body Recs:");
-    Logger.log_line (Recurrence.recs_to_string recs);
+    Logger.log_line (recs_to_string recs);
     Logger.log_line "";
     let sols = solve_recs recs in
     let some_iters = rec_sol_to_tr sols loop_vars in
@@ -101,12 +102,12 @@ module Make () = struct
 
   let rec eval p = (*Could be memoized*)
     match p with
-    | PathExp.Letter a -> interp a
-    | PathExp.One -> one
-    | PathExp.Zero -> zero
-    | PathExp.Plus (a, b) -> plus (eval a) (eval b)
-    | PathExp.Mul (a, b) -> mul (eval a) (eval b)
-    | PathExp.Star a -> star (eval a)
+    | Letter a -> interp a
+    | One -> one
+    | Zero -> zero
+    | Plus (a, b) -> plus (eval a) (eval b)
+    | Mul (a, b) -> mul (eval a) (eval b)
+    | Star a -> star (eval a)
 
   let analyze_path_exp path_exp vars = 
     set_prog_vars vars;

@@ -168,8 +168,21 @@ module Make (A : Sigs.Rational) = struct
         let new_b = Array.of_list (List.map (fun row -> neg row.((Array.length row) - 1)) new_const) in
         I (new_am, new_b, vars)
 
-  (*Converts a list of linear equations to a set of affine equations. 
-  Note, if the equations are inconsistent then the result will not be bot, but instead a set of inconsistent equalities.*)
+  let inconsistent x = 
+    match x with
+    | Top -> false
+    | Bot -> true
+    | I(m, b, vars) ->
+      let incon = ref false in
+      let check_row i row = 
+        if S.is_empty row && (not (is_zero b.(i))) then incon := true
+        else if S.for_all (fun _ coef -> is_zero coef) row && (not (is_zero b.(i))) then incon := true
+        else ()
+      in
+      Array.iteri check_row m;
+      !incon
+
+  (*Converts a list of linear equations to a set of affine equations.*)
   let eqs_to_t l =
     let eq_to_t (Sigs.Expr.Equal (lhs, rhs)) = 
       let add_term_to_map is_rhs coef var map =
@@ -207,9 +220,12 @@ module Make (A : Sigs.Rational) = struct
     in
     let (m, vars) = List.split (List.map eq_to_t l) in
     let variables = List.fold_left merge_vars [] vars in
-    let (rows, consts) = List.split m in    
-    I (Array.of_list rows, Array.of_list consts, variables)
+    let (rows, consts) = List.split m in
+    let res = I (Array.of_list rows, Array.of_list consts, variables) in
+    if inconsistent res then Bot
+    else res
       
+
   let meet x y =
     match (x, y) with
     | (Bot, _) -> Bot
@@ -234,13 +250,12 @@ module Make (A : Sigs.Rational) = struct
       let zeros_removed = List.map normalize zeros_removed in
       if List.length zeros_removed = 0 then Top
       else 
-        let new_mat_l = List.map (fun row -> Array.sub row 0 (List.length variables), neg row.(List.length variables)) zeros_removed in    
-        let incon = List.exists (fun (row, b) -> Array.for_all is_zero row && not (is_zero b)) new_mat_l in
-        if incon then Bot
-        else 
-          let (new_a_l, new_b_l) = List.split new_mat_l in
-          let new_m = to_map (Array.of_list new_a_l) variables in
-          I (new_m, Array.of_list new_b_l, variables)
+        let new_mat_l = List.map (fun row -> Array.sub row 0 (List.length variables), neg row.(List.length variables)) zeros_removed in      
+        let (new_a_l, new_b_l) = List.split new_mat_l in
+        let new_m = to_map (Array.of_list new_a_l) variables in
+        let res = I (new_m, Array.of_list new_b_l, variables) in
+        if inconsistent res then Bot
+        else res
   
 
   let add_eqs (aff : t) (l : Sigs.Expr.lineq list) = 

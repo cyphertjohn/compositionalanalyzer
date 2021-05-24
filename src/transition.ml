@@ -84,8 +84,8 @@ open PathExp
       exists y!52 havoc!42
       x' = x + 1 /\ y' = y!52 /\ z' = z /\ x < 10 /\ z = 0 /\ y!52 + havoc!42 = y + x + 1
     *)
-  type t = { transform : Z3.Expr.expr ST.t;
-             guard : Z3.Expr.expr}
+  type transition = { transform : Z3.Expr.expr ST.t;
+                      guard : Z3.Expr.expr}
 
   let zero = {transform = ST.empty; guard = Z3.Boolean.mk_false ctx}
   let one = {transform = ST.empty; guard = Z3.Boolean.mk_true ctx}
