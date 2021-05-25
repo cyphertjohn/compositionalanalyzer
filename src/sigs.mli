@@ -79,6 +79,8 @@ module PathExp :
       | Plus of 'a pathexp * 'a pathexp
       | Mul of 'a pathexp * 'a pathexp
       | Star of 'a pathexp
+
+    val pathexp_to_string : statement pathexp -> string
   end
 
 (**A signature for rational arithmetic.*)

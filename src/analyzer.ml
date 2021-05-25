@@ -2,7 +2,7 @@ open Sigs
 
 module Logger = Log
 
-module CRA = Cra.Make()
+module CRA = Cra
 
 module A = Affine.Make(Cra.Q)
 module ARA = Abstract.Make(A)
