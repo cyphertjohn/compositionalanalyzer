@@ -304,27 +304,39 @@ open PathExp
     simplify {transform = ST.empty; guard = tr.guard}
 
   (*To get the post-state we substitute fresh skolem vars for each pre-state var, and then set the pre-state vars
-    equal to the new fresh skolem var.*)
-  let get_post tr =
-    let tr_vars = get_vars tr in
-    let make_fresh_sub (sub_pairs, new_constraints) var =
-      let fresh = make_fresh var in
-      let var_const = Z3.Arithmetic.Integer.mk_const_s ctx var in
-      let subst = (var_const, fresh) in
-      let new_const = 
-        try
+    equal to the new fresh skolem var. *)
+    let get_post tr =
+      let tr_vars = get_vars tr in
+      let transform = ref ST.empty in
+      let make_fresh_sub (sub_pairs) var =
+        let fresh = make_fresh var in
+        (*transform := ST.add var fresh !transform;*)
+        let var_const = Z3.Arithmetic.Integer.mk_const_s ctx var in
+        let subst = (var_const, fresh) in
+        (try
           let new_term = Z3.Expr.substitute (ST.find var tr.transform) [var_const] [fresh] in
-          [Z3.Boolean.mk_eq ctx var_const new_term]
+          transform := ST.add var new_term !transform
         with Not_found ->
-          []
+          transform := ST.add var fresh !transform);
+        (subst :: sub_pairs)
       in
-      (subst :: sub_pairs, new_const @ new_constraints)
-    in
-    let (sub_pairs, new_constraints) = List.fold_left make_fresh_sub ([], []) tr_vars in
-    let (var_const, fresh_vars) = List.split sub_pairs in
-    let proj_guard = Z3.Expr.substitute tr.guard var_const fresh_vars in
-    simplify {transform = ST.empty; guard = Z3.Boolean.mk_and ctx (proj_guard :: new_constraints)}
+      let (sub_pairs) = List.fold_left make_fresh_sub ([]) tr_vars in
+      let (var_const, fresh_vars) = List.split sub_pairs in
+      let proj_guard = Z3.Expr.substitute tr.guard var_const fresh_vars in
+      simplify {transform = !transform; guard = proj_guard}
 
+  let meet a b =
+    let a_fresh = make_fresh_skolems a in
+    let new_eqs = ref [] in
+    let merge_transorms var a_tr b_tr =
+      let new_skol = make_fresh var in
+      new_eqs := (Z3.Boolean.mk_eq ctx new_skol a_tr) :: (Z3.Boolean.mk_eq ctx new_skol b_tr) :: !new_eqs;
+      Some new_skol
+    in
+    let a_transform = a_fresh.transform in
+    let b_transform = b.transform in
+    let new_transform = ST.union merge_transorms a_transform b_transform in
+    simplify {transform = new_transform; guard = Z3.Boolean.mk_and ctx (a_fresh.guard :: b.guard :: !new_eqs)}
 
   let neg_pre tr = 
     {transform = ST.empty; guard = Z3.Boolean.mk_not ctx tr.guard}
@@ -374,12 +386,15 @@ open PathExp
       let loop_counter = make_loop_counter () in
       let summarized_vars = ref [] in
       let folder acc (RecSol (Term (Add rec_terms), Times(inc, K))) = 
-        let process_var_term (trans, lhs_terms, rhs_terms) (Times (coef, var)) = 
-          summarized_vars := var :: !summarized_vars;
-          let fresh = make_fresh var in
-          let lhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; fresh] in
-          let rhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; Z3.Arithmetic.Integer.mk_const_s ctx var] in
-          (ST.add var fresh trans, lhs_term :: lhs_terms, rhs_term :: rhs_terms)
+        let process_var_term (trans, lhs_terms, rhs_terms) vt = 
+          match vt with
+          | (Times (coef, var)) ->
+            summarized_vars := var :: !summarized_vars;
+            let fresh = make_fresh var in
+            let lhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; fresh] in
+            let rhs_term = Z3.Arithmetic.mk_mul ctx [Z3.Arithmetic.Integer.mk_numeral_i ctx coef; Z3.Arithmetic.Integer.mk_const_s ctx var] in
+            (ST.add var fresh trans, lhs_term :: lhs_terms, rhs_term :: rhs_terms)
+          | _ -> failwith "A rec term should not have a constant integer in it."
         in
         let (transf, lhs_terms, rhs_terms) = List.fold_left process_var_term (fst acc, [], []) rec_terms in
         let increase = Z3.Arithmetic.mk_mul ctx [loop_counter; Z3.Arithmetic.Integer.mk_numeral_i ctx inc] in

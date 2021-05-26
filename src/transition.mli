@@ -18,6 +18,8 @@ val one : transition
 val plus : transition -> transition -> transition
 (**Extend two transition formulas.*)
 val mul : transition -> transition-> transition
+(*Compute the meet of two transitions. *)
+val meet : transition -> transition -> transition
 (**Intepret a statement as a transition formula.*)
 val interp : Sigs.PathExp.statement -> transition
 (**Check whether the boolean expression holds at the post state.*)

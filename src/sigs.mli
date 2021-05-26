@@ -39,15 +39,19 @@ end
 module Recurrence :
   sig
 
+   (**The additive term is just an integer constant.*)
     type additive_term = 
       Inc of int
     
+    (**A recurrence term is a linear expression.*)
     type rec_term = 
       Term of Expr.linexp
 
+    (**A recurrence Rec (Term t, Inc c) denotes t^{k+1} = t^{k} + c.*)
     type lin_rec =
       Rec of rec_term * additive_term
 
+    (**A set of linear recurrences. Either Empty indicating no information, Infeasible if the there is no set of recurrences, or a list of recurrences.*)
     type lin_recs = 
       | Empty
       | Infeasible
@@ -55,14 +59,18 @@ module Recurrence :
 
     val recs_to_string : lin_recs -> string
 
+    (**The distinguished variable used in recurrence solutions.*)
     type loop_counter = K
 
+    (** The additive of a recurrence solution.*)
     type additive_term_sol = 
       | Times of int * loop_counter
 
+    (**A recurrence solution RecSol (Term t, Times(c, K)) denotes t^k = t^0 + c*K *)
     type lin_rec_sol =
       | RecSol of rec_term * additive_term_sol
     
+    (**A set of linear recurrence solutions. Either EmptySol indicating no information, InfeasibleSol if the there is no set of recurrences, or a list of recurrences solutions.*)
     type lin_recs_sol = 
       | EmptySol
       | InfeasibleSol

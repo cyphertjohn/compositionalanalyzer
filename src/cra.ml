@@ -38,16 +38,23 @@ module ARA = Abstract.Make(A)
 
 module S = Map.Make(String)
 
-let extract_recs aff_eq loop_vars = 
+let extract_recs loop_body loop_vars = 
+  let (loop_body_form, _) = to_formula loop_body in
+
+  (*Extract the best set of affine equalities implied by the loop.*)
+  let aff_eq = ARA.alpha_from_below ctx loop_body_form in
   let delta_map = ref S.empty in
   let delta_vars = List.map (fun v -> delta_map := S.add ("d"^v) v !delta_map; "d"^v) loop_vars in
+  (*Create the delta equations*)
   let mk_delta_eq delta =
     let lhs = Add [Times (1, get_prime (S.find delta !delta_map)); Times (-1, S.find delta !delta_map)] in
     let rhs = Add [Times (1,  delta)] in
     Equal (lhs, rhs)
   in
   let delts_eq = List.map mk_delta_eq delta_vars in
+  (*Add the delta equation to the previous set of extracted equalities.*)
   let extra_eqs = A.add_eqs aff_eq delts_eq in
+  (*Project to only delta variables.*)
   let delta_only = A.project extra_eqs delta_vars in
   match delta_only with
   | A.Top -> 
@@ -67,9 +74,14 @@ let extract_recs aff_eq loop_vars =
     in
     Recs (Array.to_list (Array.mapi extract_rec m))
 
-(*Rec (Term(x+y), Inc 5) -> (x+y)' = x+y + 5 -> (x+y)' = (x+y) + 5 * k*)    
-let solve_rec (Rec (Term rec_term, Inc inc)) =
-  RecSol (Term rec_term, Times (inc, K)) 
+
+(*Rec (Term(x+y), Inc 5)               <- Example input as type Sigs.Recurrence.lin_rec
+  (x+y)_[k+1] = (x+y)_[k] + 5          <- The recurrence it corresponds to
+  (x+y)' = (x+y) + 5 * k               <- The recurrence solution
+  RecSol (Term (x+y), Times (5, K))    <- The solution as the type Sigs.Recurrence.lin_rec_sol
+  *)
+let solve_rec ((Rec (Term rec_term, Inc inc)) : lin_rec) : lin_rec_sol =
+  RecSol(Term rec_term, Times (inc, K))
 
 let solve_recs recurs = 
   match recurs with
@@ -77,23 +89,36 @@ let solve_recs recurs =
   | Infeasible -> InfeasibleSol
   | Recs recurrences -> RecsSol (List.map solve_rec recurrences)
 
-let star tr = 
-  let loop_vars = get_vars tr in
-  let form, _ = to_formula tr in
-  let pre = get_pre tr in
-  let post = get_post tr in
-  Logger.log_line ~level:`debug ("Pre:");
-  Logger.log_line ~level:`debug (to_string pre);
-  Logger.log_line ~level:`debug ("\nPost:");
-  Logger.log_line ~level:`debug (to_string post);
-  let aff_eq = ARA.alpha_from_below ctx form in
-  let recs = extract_recs aff_eq loop_vars in
-  Logger.log_line ("Loop Body Recs:");
-  Logger.log_line (recs_to_string recs);
-  Logger.log_line "";
+let star loop_body = 
+  let loop_pre_condition = get_pre loop_body in
+  let loop_post_condition = get_post loop_body in
+  Logger.log_line ~level:`trace ("Loop Pre:");
+  Logger.log_line ~level:`trace (to_string loop_pre_condition);
+  Logger.log_line ~level:`trace "";
+  Logger.log_line ~level:`trace ("Loop Post:");
+  Logger.log_line ~level:`trace (to_string loop_post_condition);
+  Logger.log_line ~level:`trace "";
+  let pre_post_transition = mul loop_pre_condition loop_post_condition in
+  
+  (* Uncomment the following block and run with debug to output
+     extracted recurrence relations.
+  *)
+  
+  let loop_vars = get_vars loop_body in 
+  let recs = extract_recs loop_body loop_vars in
+  Logger.log_line ~level:`debug ("Loop Body Recs:");
+  Logger.log_line ~level:`debug (recs_to_string recs);
+  Logger.log_line ~level:`debug "";
+  
+
+  (* Uncomment the following block for exercise 5.*)
+  
   let sols = solve_recs recs in
   let some_iters = rec_sol_to_tr sols loop_vars in
-  plus one (mul (mul pre some_iters) post)
+  plus one (meet pre_post_transition some_iters)
+  
+  
+  (*plus one pre_post_transition *)(*Comment out this line for exercise 5*)
 
 let rec eval p = (*Could be memoized*)
   match p with
