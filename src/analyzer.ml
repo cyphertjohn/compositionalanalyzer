@@ -14,8 +14,8 @@ let analyze_file in_file_name =
   let ((body, assertion), vars) = Par.main Lex.token (Lexing.from_channel ic) in
   CRA.set_prog_vars vars;
   let summary = CRA.simplify_light (CRA.analyze_path_exp body vars) in
-  Logger.log_line "Program summary:";
-  Logger.log_line (CRA.to_string summary);
+  Logger.log_line ~level:`debug "Program summary:";
+  Logger.log_line ~level:`debug (CRA.to_string summary);
   Logger.log_line "";
   (match assertion with
     | None -> ()

@@ -1,0 +1,11 @@
+assume(x >= 0 && y >= 0 && i == 0)
+z = x + y;
+while (nondet) do
+  if (nondet) then 
+    x = x + 1;
+  else
+    y = y + 1;
+  endif
+  i = i + 1;
+done
+assert(x + y == z + i)

@@ -98,7 +98,7 @@ module Recurrence =
 
     let rec_to_string (Rec (Term recterm, Inc additive)) = 
       let recterm_str = Expr.linexp_to_string recterm in
-      ("{" ^ recterm_str ^ "}^[k+1] = " ^ "{" ^ recterm_str ^ "}^[k] " ^ (string_of_int additive))
+      ("{" ^ recterm_str ^ "}^[k+1] = " ^ "{" ^ recterm_str ^ "}^[k] " ^ " + " ^  (string_of_int additive))
 
     let recs_to_string recurs =
       match recurs with

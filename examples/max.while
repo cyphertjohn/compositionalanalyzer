@@ -1,0 +1,2 @@
+(Replace this with your program)
+assert(max >= x && max >= y && max >= z && (max == x || max == y || max == z))

@@ -1,0 +1,12 @@
+assume(x >= 0)
+q = 0;
+r = x;
+while (r >= 3) do
+  t = 3;
+  while (t > 0) do
+    r = r-1;
+    t = t-1;
+  done
+  q = q+1;
+done
+assert(x == 3q + r)

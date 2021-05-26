@@ -1,0 +1,6 @@
+assume(x == 0 && y == 0)
+while (x < 100) do
+  x = x + 2;
+  y = y + 1;
+done
+assert(x == 100 && y == 50)
