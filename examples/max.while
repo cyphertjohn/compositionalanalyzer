@@ -1,2 +1,10 @@
-(Replace this with your program)
+if ( x>= y && x >= z ) then
+  max = x;
+else
+  if (y >= x && y >= z ) then
+    max = y;
+  else
+    max = z;
+  endif
+endif
 assert(max >= x && max >= y && max >= z && (max == x || max == y || max == z))
