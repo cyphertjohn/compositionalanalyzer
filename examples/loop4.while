@@ -1,0 +1,5 @@
+assume(x == 0)
+while (!(x == 100)) do
+  x = x + 1;
+done
+assert(x == 100)
