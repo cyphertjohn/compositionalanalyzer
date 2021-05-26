@@ -61,7 +61,7 @@ Here is the basic grammar for a "while" program P, where x ranges over variables
 
 To see some example programs look in the `examples` directory. The semantics of these programs is that all variables have integer type and are assumed to have been already initialized to some unknown value. Programs can also start with an `assume` which constrains the incoming values of program variables. Programs can also end with an `assert`. In this case the analyzer will attempt to prove whether the expression in the assertion holds for all possible initial states.
 
-The idea of this analyzer is to summarize the transition relation of a while program. That is, consider some program P. Let **y** denote the values of variables at the start P, **y'** denote the values of variables after P, and let **y**P**x'** denote that **y'** is the post state if P runs given the pre-state assignment **y**. The transition relation of P is then the union of all possible (**y**, **y'**) such that **y**P**y'** holds. The analyzer will summarize this relation with a *transition formula* F(**x**, **x'**) over pre-state variables **x** and post-state variables **x'**. A transition formula, F(**x**, **x'**), is sound if
+The idea of this analyzer is to summarize the transition relation of a while program. That is, consider some program P. Let **y** denote the values of variables at the start P, **y'** denote the values of variables after P, and let **y**P**y'** denote that **y'** is a possible post-state if P runs given the pre-state assignment **y**. The transition relation of P is then the union of all possible (**y**, **y'**) such that **y**P**y'** holds. The analyzer will summarize this relation with a *transition formula* F(**x**, **x'**) over pre-state variables **x** and post-state variables **x'**. A transition formula, F(**x**, **x'**), is sound if
 > For every (**y**, **y'**) if **y**P**y'** holds then F(**y**, **y'**) also holds.
 
 A sound transition formula can then be used to check assertions or some other down-stream program analysis task.
@@ -102,7 +102,7 @@ you should see a path-expression with a \+ indicating a branch in the program. Y
 
 For the simple while programming language, extracting a path-expression from a program is simple. Branches correspond to \+, loops to \*, and sequencing to concatenation. In fact this analyzer parses input programs directly as path-expressions in `par.mly`. For languages with more complicated constructs, like `goto`, a more complicated algorithm, such as [Tarjan's algorithm](https://dl.acm.org/doi/10.1145/322261.322273), is required. 
 
-Once a path-expression has been constructed, we must "re-intepret" the regular expression in our analysis domain. For the case of this analyzer that means we must interpret the letters of the path-expression as transition formulas, and interpret the regular expression operators as operations on transition formulas.
+Once a path-expression has been constructed, we must "re-intepret" or "evaluate" the regular expression in our analysis domain. For the case of this analyzer that means we must interpret the letters of the path-expression as transition formulas, and interpret the regular expression operators as operations on transition formulas.
 
 It should be clear how to transform a single program statement or condition to a transition formula.
 
@@ -136,7 +136,7 @@ Similarly if you re-run
 ```
 The analyzer constructed this summary by interpreting dc and ba as transition formulas, or\-ing those together, and then pre-pending the interpretation of fe to the result.
 
-The implementation for intepreting path-expressions of loop-free code can be found in `transition.ml`. The intepretations for program statements can be found at around line 240. The interpretation for extend is called mul, and choice is called add at lines 224 and 194 respectively. The add and mul functions are more complicated that what is given above due to the particular representation of a transition formula, but the effectively implemented the definitions above. Finally, whole path-expressions are intepreted with the recursive `eval` function in `cra.ml`.
+The implementation for intepreting path-expressions of loop-free code can be found in `transition.ml`. The intepretations for program statements can be found at around line 240. The interpretation for extend is called mul, and choice is called add at lines 224 and 194 respectively. The add and mul functions are more complicated that what is given above due to the particular representation of a transition formula, but the fuctions essentially implement the definitions above. Finally, whole path-expressions are intepreted with the recursive `eval` function in `cra.ml`.
 
 > Open `max.while` and write a program that sets a variable "max" to the maximum of variables "x", "y", and "z" such that the assertion passes.
 
@@ -161,7 +161,9 @@ To see why, note the loop post-state. This formula says that x' <= 100 at the en
 
 >x' = x \\/ x < 100 /\ x' <= 100
 
-Then the analyzer tacks on the condition that x >= 100 for the loop to terminate. This, along with the fact that x=0 initially implies that
+The lhs of the disjunction corresponds to the case where the loop does not iterate, and the rhs corresponds to the case of 1 or more iterations of the loop.
+
+Then the analyzer tacks on the condition that x >= 100 for the loop to terminate, or the case when the loop doesn't iterate at all. This, along with the fact that x=0 initially implies that
 
 > x' <= 100 /\\ x' >= 100
 
@@ -173,12 +175,12 @@ Now take a look at `examples/loop2.while`. This program is the same as `examples
 ```
 you will see the analyzer is unable to prove the assertion.
 
->Look at the loop pre-state and post-state and determine by hand what the loop-summary is using the definition of star above. Explain why the analyzer is unable to prove the assertion and then make a small modification to the assertion expression so the analyzer is able to prove the assertion.
+>Look at the loop pre-state and post-state and determine by hand what the loop-summary is using the definition of star above. Try and understand why the analyzer is unable to prove the assertion and then make a small modification to the assertion so that the analyzer is able to prove the assertion.
 
 ### Exercise 4
 `loop3.while` gives another example of a true assertion that the analyzer is unable to prove. The problem is that with the above method for computing \* we are introducing too much abstraction. In this exercise we will investigate a more precise method of using *recurrence relations*.
 
-The idea is that to compute f(**x**, **x'**)\*, we will extract a set of implied recurrence relations from f, solve those recurrence relations, and convert the solution back as a transition formula.
+The idea is that to compute f(**x**, **x'**)\* we will extract a set of implied recurrence relations from f, solve those recurrence relations, and convert the solution back as a transition formula.
 
 Recall `examples/loop1.while`. The loop-body formula is
 
@@ -188,7 +190,7 @@ Let k be some natural number which we will use to denote the values of variables
 
 >x\_[k+1] = x_[k] + 1
 
-which has the solution
+which has the closed-form
 
 >x\_[k] = x_[0] + k
 
@@ -200,7 +202,7 @@ We can also use the strategy from exercise 3 and add the pre-state and post-stat
 
 > x' = x \\/ exists k >= 1. x' = x + k /\ x < 100 /\ x' <= 100
 
-In this exercise we will slightly modify the solver to implement this strategy.
+In the next exercise we will slightly modify the solver to implement this strategy.
 
 First, we must target a class of recurrences that we will extract and solve. For this lab we will target *linear recurrence equations*, (for a more complicated class of recurrences see [Non-linear Reasoning for Invariant Synthesis](https://dl.acm.org/doi/10.1145/3158142)). A linear recurrence equation has the form
 
@@ -216,18 +218,18 @@ The solution to such an equation is
 
 for distinguished loop counter k.
 
-To see the utility of linear recurrences, navigate to `cra.ml`, and uncomment the code block from approximately lines 97-103 in the `star` function. What the analyzer will now do is print out the set of recurrence relations it extracts when run with debug verbosity. Run `make`.
+To see the utility of linear recurrences, navigate to `cra.ml`, and uncomment the code block from approximately lines 97-103 in the `star` function. What the analyzer will now do is print out the set of recurrence relations it extracts when run with debug verbosity. Note, the analyzer will not use the extracted recurrence relations except for printing at this point. Run `make`.
 
 Now take a look at `examples/loop_branch.while`. The loop in this program has a branch, and thus one might assume that there is no recurrence relation capturing the dynamics of x or y that is implied by the loop body. While it is the case that there is no recurrence for x or y, there is a recurrence for the *term* x+y. That is we have
 
-> (x + y)_[k+1] = (x+y)\_[k] + 1
+> (x + y)_[k+1] = (x+y)\_[k] + 1. Convince yourself this is a sound recurrence relation.
 
 If you run `./analyzer.native -v debug examples/loop_branch.while` you should see this recurrence relation as output.
 
 ### Exercise 5
-In this exercise we investigate how the analyzer extracts linear recurrence equations. This process is implemented in `cra.ml` at about line 40 if you would like to follow along.
+In this exercise we investigate how the analyzer extracts linear recurrence equations. This process is implemented in `cra.ml` at about line 40 if you would like to follow along. The high-level process works as follows:
 
-1. Abstract the loop body formula to a set of affine equations using `alpha_from_below` from the first lab. This procedure extracts the *best* set of affine equations implied by the loop body. That is a matrix-vector equation E[**xx'**] = e, where [**xx'**] is a column vector of primed and unprimed program variables.
+1. Abstract the loop body formula to a set of affine equations using `alpha_from_below` from the first lab. This procedure extracts the *best* set of affine equations implied by the loop body. That is, a matrix-vector equation E[**xx'**] = e, where [**xx'**] is a column vector of primed and unprimed program variables.
 
 2. For each program variable x, introduce a delta variable, d, and add the equation d = x' - x to the set of affine equatoins. Each delta variable represents the change to variable x in the loop body. Our set of affine equations, now looks like
 > E'[**xx'd**] = e' for some E' and e'.
@@ -245,3 +247,10 @@ Once `solve_rec` is implemented, `analyzer.native` will be a complete analyzer f
 An interesting example to try is `examples/division_by_3.while`, which is a contrived implementation of a program that computes the remainder and divisor of x by 3. The assertion at the end of the program requires that the program indeed does compute the right values. Furthermore, the recurrence version of the analyzer will be able to prove that this assertion always holds.
 
 This concludes lab 2. Feel free to create your own while programs, and run `analyzer.native` to see what happens.
+
+### Addendum
+While this lab gives a complete program analyzer, the resulting analyzer has room for improvement. Here are a couple meta-level points
+
+- I do not claim that the analyzer is free from bugs. Thus, the only purpose of this repository is for instruction.
+- The analyzer is not as efficient as it can be. A pain point is the use of quantifier elimination in the simplify functions in `transition.ml`. These functions are not functionally necessary, but they do result in more human-readable program summaries.
+- There are a myriad of other optimizations and precision improvements that can be implemented. For example, the analyzer only extract linear-recurrence *equations*. However, with not too much extra work the analyzer could extract and solve linear-recurrence *in-equations*. That is recurrences of the form A**x'** <= A**x** + **b**. The process for extracting and solving these equations would be almost identical to the above process. The only difference would be to replace the affine equality domain with a domain of convex polyhedra. That is, instead of extracting affine equalities E[**xx'**] = e, extract convex hulls E[**xx'**] <= e. In that case the analyzer would be able to summarize programs with more in-equality information and introduce less abstraction. Even more complicated classes of recurrences are possible, but would require a lot more infrastructure to implement. See [the cra paper](https://www.cs.utexas.edu/users/hunt/FMCAD/FMCAD15/papers/paper27.pdf) and [Non-linear Reasoning for Invariant Synthesis](https://dl.acm.org/doi/10.1145/3158142) for more information.
