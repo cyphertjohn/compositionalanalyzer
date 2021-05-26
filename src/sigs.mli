@@ -47,7 +47,7 @@ module Recurrence :
     type rec_term = 
       Term of Expr.linexp
 
-    (**A recurrence Rec (Term t, Inc c) denotes t^{k+1} = t^{k} + c.*)
+    (**A recurrence Rec (Term t, Inc c) denotes t^\{k+1\} = t^\{k\} + c.*)
     type lin_rec =
       Rec of rec_term * additive_term
 
