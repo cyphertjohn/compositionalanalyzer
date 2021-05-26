@@ -159,7 +159,7 @@ The analyzer should print the loop pre-condition and the loop post-condition as 
 
 To see why, note the loop post-state. This formula says that x' <= 100 at the end of every iteration of the loop. Using the above definition for the star the analyzer summarizes (just the loop) as
 
->x' = x \/ x < 100 /\ x' <= 100
+>x' = x \\/ x < 100 /\ x' <= 100
 
 Then the analyzer tacks on the condition that x >= 100 for the loop to terminate. This, along with the fact that x=0 initially implies that
 
@@ -194,11 +194,11 @@ which has the solution
 
 This solution can be converted back to a formula yield the following summary
 
-> x' = x \/ exists k >= 1. x' = x + k
+> x' = x \\/ exists k >= 1. x' = x + k
 
 We can also use the strategy from exercise 3 and add the pre-state and post-state to the case where the loop iterates for more precision
 
-> x' = x \/ exists k >= 1. x' = x + k /\ x < 100 /\ x' <= 100
+> x' = x \\/ exists k >= 1. x' = x + k /\ x < 100 /\ x' <= 100
 
 In this exercise we will slightly modify the solver to implement this strategy.
 
