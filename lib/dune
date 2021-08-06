@@ -1,0 +1,11 @@
+(library
+ (name comp)
+ (public_name compositional_analyzer)
+ (private_modules lex par)
+ (libraries gmp z3))
+
+(ocamllex
+(modules lex))
+
+(menhir
+(modules par))

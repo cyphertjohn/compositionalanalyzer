@@ -1,0 +1,5 @@
+(executable
+ (name analyzer)
+ (libraries compositional_analyzer)
+ (promote (until-clean) (into ..))
+ (modules analyzer))
